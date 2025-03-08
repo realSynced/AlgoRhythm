@@ -9,16 +9,25 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@heroui/navbar": "^2.2.14",
+    "@heroui/react": "^2.7.5",
+    "@heroui/system": "^2.4.12",
+    "@heroui/theme": "^2.4.12",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.49.1",
+    "framer-motion": "^12.4.10",
+    "lenis": "^1.2.3",
+    "next": "^15.2.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "next": "15.2.1"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4"
+    "prettier": "3.5.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
