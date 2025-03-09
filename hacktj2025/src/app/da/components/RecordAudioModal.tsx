@@ -55,6 +55,7 @@ export default function RecordAudioModal({
       <div style={{ padding: "16px" }}>
         <h4>Record Audio</h4>
         <Button
+          // @ts-expect-error
           auto
           color={isRecording ? "danger" : "primary"}
           icon={isRecording ? <BsStopFill /> : <BsRecordFill />}
