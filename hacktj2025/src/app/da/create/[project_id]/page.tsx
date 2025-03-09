@@ -29,6 +29,7 @@ import {
 
 import { useDisclosure, Modal, Button } from "@nextui-org/react";
 import ManageFilesModal from "@/app/da/components/ManageFilesModal";
+import MidiPlayer from "@/app/da/components/MidiPlayer";
 import { useRouter } from "next/navigation";
 
 interface Track {
@@ -44,6 +45,7 @@ interface AudioFile {
   trackId: number;
   startTime: number;
   duration: number;
+  type?: string;
 }
 
 export default function CreateMusic({ params }: { params: any }) {
@@ -84,66 +86,69 @@ export default function CreateMusic({ params }: { params: any }) {
   }, [audioFiles]);
 
   const handleFileUpload = useCallback(
-    (files: File[]) => {
+    (files: File[], convertToMidi?: boolean) => {
       if (!selectedTrack) {
-        // Create a new track if none is selected
-        const newTrack: Track = {
-          id: Date.now(),
-          name: `Track ${tracks.length + 1}`,
-          trackType: "Audio",
-        };
-        setTracks((prev) => [...prev, newTrack]);
+        alert("Please select a track first");
+        return;
+      }
 
-        // Create audio files for the new track
-        const newAudioFiles: AudioFile[] = files.map((file) => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: file.name,
-          url: URL.createObjectURL(file),
-          trackId: newTrack.id,
-          startTime: 0,
-          duration: 0,
-        }));
-        setAudioFiles((prev) => [...prev, ...newAudioFiles]);
+      const newAudioFiles: AudioFile[] = [];
 
-        // Load audio durations
-        files.forEach((file, index) => {
-          const audio = new Audio(URL.createObjectURL(file));
+      for (const file of files) {
+        const fileType = file.type || (file.name.endsWith('.mid') || file.name.endsWith('.midi') ? 'audio/midi' : '');
+        const url = URL.createObjectURL(file);
+        const audio = new Audio();
+        
+        // For MIDI files, set a default duration
+        const isMidi = fileType === 'audio/midi' || file.name.endsWith('.mid') || file.name.endsWith('.midi');
+        
+        if (isMidi) {
+          // For MIDI files, use a default duration
+          const newAudioFile: AudioFile = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            url,
+            trackId: selectedTrack.id,
+            startTime: 0,
+            duration: 30, // Default duration for MIDI files
+            type: 'midi'
+          };
+          newAudioFiles.push(newAudioFile);
+          
+          // Create audio element for the file
+          setAudioElements((prev) => ({
+            ...prev,
+            [newAudioFile.id]: audio,
+          }));
+        } else {
+          // For regular audio files
+          audio.src = url;
           audio.addEventListener("loadedmetadata", () => {
-            setAudioFiles((prev) =>
-              prev.map((af, i) =>
-                i === index ? { ...af, duration: audio.duration } : af
-              )
-            );
+            const newAudioFile: AudioFile = {
+              id: Math.random().toString(36).substr(2, 9),
+              name: file.name,
+              url,
+              trackId: selectedTrack.id,
+              startTime: 0,
+              duration: audio.duration,
+              type: 'audio'
+            };
+            setAudioFiles((prev) => [...prev, newAudioFile]);
+            
+            // Create audio element for the file
+            setAudioElements((prev) => ({
+              ...prev,
+              [newAudioFile.id]: audio,
+            }));
           });
-        });
-      } else {
-        // Add files to selected track
-        const newAudioFiles: AudioFile[] = files.map((file) => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: file.name,
-          url: URL.createObjectURL(file),
-          trackId: selectedTrack.id,
-          startTime: 0,
-          duration: 0,
-        }));
+        }
+      }
+      
+      if (newAudioFiles.length > 0) {
         setAudioFiles((prev) => [...prev, ...newAudioFiles]);
-
-        // Load audio durations
-        files.forEach((file, index) => {
-          const audio = new Audio(URL.createObjectURL(file));
-          audio.addEventListener("loadedmetadata", () => {
-            setAudioFiles((prev) =>
-              prev.map((af) =>
-                af.id === newAudioFiles[index].id
-                  ? { ...af, duration: audio.duration }
-                  : af
-              )
-            );
-          });
-        });
       }
     },
-    [selectedTrack, tracks.length]
+    [selectedTrack]
   );
 
   const handleAddTrack = () => {
@@ -391,11 +396,11 @@ export default function CreateMusic({ params }: { params: any }) {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
     const validFiles = files.filter((file) =>
-      /\.(wav|mp3|ogg|aac|m4a)$/i.test(file.name)
+      /\.(wav|mp3|ogg|aac|m4a|mid|midi)$/i.test(file.name)
     );
 
     if (validFiles.length === 0) {
-      alert("Please drop valid audio files (WAV, MP3, OGG, AAC, M4A)");
+      alert("Please drop valid audio files (WAV, MP3, OGG, AAC, M4A, MID, MIDI)");
       return;
     }
 
@@ -407,6 +412,7 @@ export default function CreateMusic({ params }: { params: any }) {
       trackId,
       startTime: 0,
       duration: 0,
+      type: file.name.endsWith('.mid') || file.name.endsWith('.midi') ? 'midi' : 'audio'
     }));
 
     setAudioFiles((prev) => [...prev, ...newAudioFiles]);
@@ -636,6 +642,9 @@ export default function CreateMusic({ params }: { params: any }) {
                         files={audioFiles.filter((f) => f.trackId === track.id)}
                         onFileDrop={handleFileDrop}
                         onAudioMove={handleAudioMove}
+                        duration={totalDuration}
+                        isPlaying={isPlaying}
+                        currentTime={currentTime}
                       />
                     ))}
                   </div>
@@ -799,11 +808,17 @@ function Timeline({
   files,
   onFileDrop,
   onAudioMove,
+  duration,
+  isPlaying,
+  currentTime,
 }: {
   trackId: number;
   files: AudioFile[];
   onFileDrop: (e: React.DragEvent, trackId: number) => void;
   onAudioMove: (fileId: string, trackId: number, startTime: number) => void;
+  duration: number;
+  isPlaying: boolean;
+  currentTime: number;
 }) {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -883,45 +898,28 @@ function Timeline({
         {files.map((file) => (
           <div
             key={file.id}
-            className="absolute top-0 h-[calc(100%-2rem)] bg-[#bca6cf]/20 rounded-lg cursor-move group"
+            className="absolute h-full rounded-lg bg-neutral-700 cursor-move"
             style={{
-              left: `${file.startTime * 100}px`,
-              width: `${Math.max(file.duration * 100, 200)}px`,
+              left: `${(file.startTime / duration) * 100}%`,
+              width: `${(file.duration / duration) * 100}%`,
             }}
             draggable
             onDragStart={(e) => handleAudioDragStart(e, file.id)}
+            onDragEnd={handleAudioDrop}
           >
-            {/* Waveform visualization */}
-            <div className="absolute inset-x-0 bottom-0 h-12 px-3">
-              <div className="relative h-full">
-                <div className="absolute inset-0 flex items-center justify-between">
-                  {Array.from({ length: 50 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-0.5 bg-[#bca6cf]/30 rounded-full transition-all duration-200"
-                      style={{
-                        height: `${30 + Math.sin(i * 0.5) * 20}%`,
-                        opacity: isDraggingOver ? 0.5 : 0.3,
-                        transform: isDraggingOver ? "scaleY(1.1)" : "scaleY(1)",
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* File info */}
-            <div className="p-3">
-              <div className="text-sm font-medium truncate text-white">
-                {file.name}
-              </div>
-              <div className="text-xs text-neutral-400">
-                {file.duration.toFixed(1)}s
-              </div>
-            </div>
-
-            {/* Hover effect */}
-            <div className="absolute inset-0 ring-2 ring-[#bca6cf]/0 group-hover:ring-[#bca6cf]/30 rounded-lg transition-all" />
+            <div className="p-2 text-xs truncate">{file.name}</div>
+            
+            {/* Render MIDI Player for MIDI files */}
+            {file.type === 'midi' && (
+              <MidiPlayer
+                url={file.url}
+                trackId={file.trackId}
+                startTime={file.startTime}
+                duration={file.duration}
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+              />
+            )}
           </div>
         ))}
       </div>
