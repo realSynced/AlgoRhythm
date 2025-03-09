@@ -44,11 +44,20 @@ export default function CreateMusic() {
   const [audioElements, setAudioElements] = useState<{ [key: string]: HTMLAudioElement }>({});
 
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(60);
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  // Calculate total duration based on audio files
+  const totalDuration = useMemo(() => {
+    const maxAudioEnd = audioFiles.reduce((max, file) => {
+      const endTime = file.startTime + file.duration;
+      return Math.max(max, endTime);
+    }, 0);
+    return Math.max(maxAudioEnd + 30, 60); // At least 60 seconds, plus 30 seconds buffer
+  }, [audioFiles]);
 
   const handleFileUpload = useCallback((files: File[]) => {
     if (!selectedTrack) {
@@ -168,7 +177,7 @@ export default function CreateMusic() {
     if (isPlaying) {
       const interval = setInterval(() => {
         setCurrentTime((time) => {
-          if (time >= duration) {
+          if (time >= totalDuration) {
             setIsPlaying(false);
             // Reset all audio elements
             Object.values(audioElements).forEach((audio) => {
@@ -213,10 +222,11 @@ export default function CreateMusic() {
         clearInterval(timer);
       }
     };
-  }, [isPlaying, duration, audioElements, audioFiles]);
+  }, [isPlaying, totalDuration, audioElements, audioFiles, timer]);
 
   const handlePlay = () => {
     setIsPlaying(true);
+    setIsRecording(false);
   };
 
   const handlePause = () => {
@@ -225,12 +235,18 @@ export default function CreateMusic() {
 
   const handleStop = () => {
     setIsPlaying(false);
+    setIsRecording(false);
     setCurrentTime(0);
     // Reset all audio elements
     Object.values(audioElements).forEach((audio) => {
       audio.pause();
       audio.currentTime = 0;
     });
+  };
+
+  const handleRecord = () => {
+    setIsRecording(true);
+    setIsPlaying(false);
   };
 
   const handleSeek = useCallback((time: number) => {
@@ -296,6 +312,16 @@ export default function CreateMusic() {
     };
   };
 
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const scrollLeft = e.currentTarget.scrollLeft;
+    setScrollPosition(scrollLeft);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = scrollLeft;
+    }
+  }, []);
+
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+
   return (
     <>
       <div className="flex flex-col h-screen bg-black text-white top-0 overflow-y-hidden">
@@ -318,7 +344,7 @@ export default function CreateMusic() {
               placeholder="New Project"
               type="text"
             />
-            <div className="flex items-center gap-2 w-1/3">
+            <div className="flex items-center justify-center space-x-6 py-4">
               {/* Undo and Redo buttons */}
               <div className="flex items-center w-max bg-neutral-800 rounded-full">
                 <button className="rounded-l-full p-3 hover:bg-[#bca6cf] transition-colors">
@@ -328,61 +354,67 @@ export default function CreateMusic() {
                   <GrRedo className="text-3xl" />
                 </button>
               </div>
-              {/* Music controls */}
-              <div className="flex-1 flex justify-center">
-                <div className="flex items-center bg-neutral-800 rounded-full">
-                  <button className="p-3 hover:bg-[#bca6cf] transition-colors rounded-l-full">
-                    <BsSkipStartFill className="text-3xl" />
-                  </button>
-                  <button
-                    className="p-3 hover:bg-[#bca6cf] transition-colors"
-                    onClick={handlePlay}
-                  >
-                    <BsPlayFill className="text-3xl" />
-                  </button>
-                  <button
-                    className="p-3 hover:bg-[#bca6cf] transition-colors"
-                    onClick={handlePause}
-                  >
-                    <BsPauseFill className="text-3xl" />
-                  </button>
-                  <button
-                    className="p-3 hover:bg-[#bca6cf] transition-colors"
-                    onClick={handleStop}
-                  >
-                    <BsStopFill className="text-3xl" />
-                  </button>
-                  <button
-                    className="p-3 hover:bg-[#bca6cf] transition-colors rounded-r-full"
-                    onClick={handleStop}
-                  >
-                    <BsRecordFill className="text-3xl text-red-500" />
-                  </button>
-                </div>
+              {/* Playback controls */}
+              <div className="flex items-center bg-neutral-800/50 rounded-3xl shadow-lg border border-neutral-700/30 backdrop-blur-sm">
+                <button
+                  className={`p-3 rounded-l-3xl transition-all duration-200 ${
+                    isPlaying
+                      ? "bg-[#bca6cf] text-neutral-900 shadow-inner"
+                      : "hover:bg-[#bca6cf]/20 text-white"
+                  }`}
+                  onClick={handlePlay}
+                  disabled={isPlaying}
+                >
+                  <BsPlayFill className={`text-3xl transform transition-transform ${isPlaying ? "scale-105" : ""}`} />
+                </button>
+                <div className="w-px h-8 bg-neutral-700/30" />
+                <button
+                  className={`p-3 transition-all duration-200 ${
+                    !isPlaying && isRecording
+                      ? "hover:bg-[#bca6cf]/20 text-white"
+                      : isPlaying
+                        ? "bg-[#bca6cf] text-neutral-900 shadow-inner"
+                        : "text-neutral-500"
+                  }`}
+                  onClick={handlePause}
+                  disabled={!isPlaying}
+                >
+                  <BsPauseFill className={`text-3xl transform transition-transform ${!isPlaying ? "" : "scale-105"}`} />
+                </button>
+                <div className="w-px h-8 bg-neutral-700/30" />
+                <button
+                  className="p-3 transition-all duration-200 hover:bg-[#bca6cf]/20 text-white"
+                  onClick={handleStop}
+                >
+                  <BsStopFill className="text-3xl" />
+                </button>
+                <div className="w-px h-8 bg-neutral-700/30" />
+                <button
+                  className={`p-3 rounded-r-3xl transition-all duration-200 ${
+                    isRecording
+                      ? "bg-[#bca6cf] text-neutral-900 shadow-inner"
+                      : "hover:bg-[#bca6cf]/20 text-white"
+                  }`}
+                  onClick={handleRecord}
+                  disabled={isRecording}
+                >
+                  <BsRecordFill
+                    className={`text-3xl transition-all duration-200 ${
+                      isRecording
+                        ? "text-red-600 animate-pulse scale-105"
+                        : "text-red-500 hover:text-red-400"
+                    }`}
+                  />
+                </button>
               </div>
-              {/* Timer that starts when play is clicked */}
-              <div className="flex items-center bg-neutral-800 rounded-full px-4 ml-4">
-                <div className="text-neutral-400 mr-2 text-sm font-medium tracking-wider">
-                  TIME
-                </div>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    className="w-14 text-xl font-mono bg-transparent outline-none text-center py-3  hover:text-white transition-colors rounded-l-full cursor-pointer focus:text-white"
-                    value={
-                      formatTime(currentTime).minutes +
-                      ":" +
-                      formatTime(currentTime).seconds
-                    }
-                    readOnly
-                  />
-                  <span className="text-xl font-mono text-neutral-400">:</span>
-                  <input
-                    type="text"
-                    className="w-12 text-xl font-mono bg-transparent outline-none text-center py-3  hover:text-white transition-colors rounded-r-full cursor-pointer focus:text-white"
-                    value={formatTime(currentTime).centiseconds}
-                    readOnly
-                  />
+              {/* Time display */}
+              <div className="bg-neutral-800/50 px-6 py-2 rounded-3xl shadow-lg border border-neutral-700/30 backdrop-blur-sm">
+                <div className="text-2xl font-mono tracking-wider">
+                  <span className="text-[#bca6cf]">{formatTime(currentTime).minutes}</span>
+                  <span className="text-neutral-500">:</span>
+                  <span className="text-[#bca6cf]">{formatTime(currentTime).seconds}</span>
+                  <span className="text-neutral-500">.</span>
+                  <span className="text-[#bca6cf]/70">{formatTime(currentTime).centiseconds}</span>
                 </div>
               </div>
             </div>
@@ -444,19 +476,27 @@ export default function CreateMusic() {
                 <TimelineRuler
                   playing={isPlaying}
                   currentTime={currentTime}
-                  duration={duration}
+                  duration={totalDuration}
                   onSeek={handleSeek}
+                  onScroll={handleScroll}
+                  scrollPosition={scrollPosition}
                 />
-                <div className="flex flex-col gap-0.5">
-                  {tracks.map((track) => (
-                    <Timeline
-                      key={track.id}
-                      trackId={track.id}
-                      files={audioFiles.filter((f) => f.trackId === track.id)}
-                      onFileDrop={handleFileDrop}
-                      onAudioMove={handleAudioMove}
-                    />
-                  ))}
+                <div
+                  ref={scrollContainerRef}
+                  className="flex-1 overflow-x-auto"
+                  onScroll={handleScroll}
+                >
+                  <div style={{ minWidth: `${totalDuration * 100}px` }}>
+                    {tracks.map((track) => (
+                      <Timeline
+                        key={track.id}
+                        trackId={track.id}
+                        files={audioFiles.filter((f) => f.trackId === track.id)}
+                        onFileDrop={handleFileDrop}
+                        onAudioMove={handleAudioMove}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -618,7 +658,7 @@ function Timeline({
   }, [onAudioMove, trackId]);
 
   return (
-    <div 
+    <div
       ref={timelineRef}
       className={`w-full h-[8rem] bg-neutral-800 text-white transition-colors relative ${
         isDraggingOver ? 'bg-[#bca6cf]/10' : 'hover:bg-neutral-700'
@@ -653,7 +693,7 @@ function Timeline({
           <div
             key={file.id}
             className="absolute top-0 h-[calc(100%-2rem)] bg-[#bca6cf]/20 rounded-lg cursor-move group"
-            style={{ 
+            style={{
               left: `${file.startTime * 100}px`,
               width: `${Math.max(file.duration * 100, 200)}px`
             }}
@@ -703,19 +743,39 @@ function TimelineRuler({
   currentTime,
   duration,
   onSeek,
+  onScroll,
+  scrollPosition,
 }: {
   playing: boolean;
   currentTime: number;
   duration: number;
   onSeek: (time: number) => void;
+  onScroll: (e: React.UIEvent<HTMLDivElement>) => void;
+  scrollPosition: number;
 }) {
-  const timeMarkers = Array.from({ length: 60 }, (_, i) => i);
-  const minorMarkers = Array.from({ length: 4 }, (_, i) => i);
   const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Calculate number of markers needed based on duration
+  const markerCount = useMemo(() => {
+    return Math.ceil(duration); // One marker per second
+  }, [duration]);
+
+  const timeMarkers = useMemo(() => {
+    return Array.from({ length: markerCount }, (_, i) => i);
+  }, [markerCount]);
+
+  const minorMarkers = Array.from({ length: 4 }, (_, i) => i);
 
   const playheadPosition = useMemo(() => {
     return currentTime * 100;
   }, [currentTime]);
+
+  // Keep timeline ruler in sync with tracks
+  useEffect(() => {
+    if (timelineRef.current) {
+      timelineRef.current.scrollLeft = scrollPosition;
+    }
+  }, [scrollPosition]);
 
   const handleTimelineClick = useCallback(
     (e: React.MouseEvent) => {
@@ -749,17 +809,23 @@ function TimelineRuler({
       playheadX < timeline.scrollLeft ||
       playheadX > timeline.scrollLeft + timeline.clientWidth
     ) {
-      timeline.scrollLeft = playheadX - timeline.clientWidth / 2;
+      const newScrollLeft = playheadX - timeline.clientWidth / 2;
+      timeline.scrollLeft = newScrollLeft;
+      onScroll({ currentTarget: { scrollLeft: newScrollLeft } } as React.UIEvent<HTMLDivElement>);
     }
-  }, [playheadPosition, playing]);
+  }, [playheadPosition, playing, onScroll]);
 
   return (
     <div
       ref={timelineRef}
-      className="w-full h-[4rem] bg-neutral-800/50 text-white border-b border-neutral-700 relative select-none"
+      className="w-full h-[4rem] bg-neutral-800/50 text-white border-b border-neutral-700 relative select-none overflow-x-auto"
       onClick={handleTimelineClick}
+      onScroll={onScroll}
     >
-      <div className="absolute inset-0 flex items-end overflow-x-auto overflow-y-hidden">
+      <div
+        className="absolute inset-0 flex items-end"
+        style={{ minWidth: `${markerCount * 100}px` }}
+      >
         {timeMarkers.map((marker) => (
           <div
             key={marker}
@@ -805,7 +871,7 @@ function Playhead({
 }: {
   position: number;
   isPlaying: boolean;
-  onSeek: (position: number) => void;
+  onSeek: (time: number) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const playheadRef = useRef<HTMLDivElement>(null);
