@@ -1,37 +1,42 @@
 "use client";
 
-import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Button,
-  useDisclosure,
-} from "@nextui-org/react";
+import { Modal, ModalContent, ModalHeader, ModalBody, Button, useDisclosure } from "@nextui-org/react";
+import { useCallback, useState } from "react";
 import { BsUpload, BsMusicNote, BsTrash } from "react-icons/bs";
-import React, { useState, useCallback } from "react";
-
 import { createClient } from "@/utils/supabase/client";
 
 interface ManageFilesModalProps {
   isOpen: boolean;
   onOpenChange: () => void;
-  onFileUpload?: (files: File[]) => void;
+  onFileUpload?: (files: File[], convertToMidi?: boolean) => void;
+  projectId: number;
 }
 
-const ManageFilesModal = ({
+interface UploadedFile {
+  id: number;
+  file: File;
+  duration: number;
+}
+
+const supabase = createClient();
+
+export default function ManageFilesModal({
   isOpen,
   onOpenChange,
   onFileUpload,
-}: ManageFilesModalProps) => {
+  projectId
+}: ManageFilesModalProps) {
   const [dragActive, setDragActive] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(
-    null
-  );
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
   const { isOpen: isErrorOpen, onOpen: onErrorOpen, onClose: onErrorClose } = useDisclosure();
   const { isOpen: isSuccessOpen, onOpen: onSuccessOpen, onClose: onSuccessClose } = useDisclosure();
+
+  const isValidAudioFile = (file: File) => {
+    const validExtensions = ['wav', 'mp3', 'ogg', 'aac', 'm4a'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    return validExtensions.includes(fileExt || '') || file.type.startsWith('audio/');
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -42,85 +47,141 @@ const ManageFilesModal = ({
     setDragActive(false);
   }, []);
 
+  const handleFileUpload = async (files: File[]) => {
+    try {
+      const loadingToast = document.createElement('div');
+      loadingToast.className = 'fixed bottom-4 right-4 bg-neutral-800 text-white px-4 py-2 rounded-xl shadow-lg z-50 flex items-center gap-2';
+      loadingToast.innerHTML = `
+        <div class="w-4 h-4 rounded-full border-2 border-[#bca6cf] border-t-transparent animate-spin"></div>
+        <span>Uploading files...</span>
+      `;
+      document.body.appendChild(loadingToast);
+
+      for (const file of files) {
+        const fileExt = file.name.split('.').pop()?.toLowerCase();
+        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+        // Upload file to Supabase Storage
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('audio')
+          .upload(fileName, file);
+
+        if (storageError) {
+          console.error('Error uploading to storage:', storageError);
+          document.body.removeChild(loadingToast);
+          onErrorOpen();
+          return;
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('audio')
+          .getPublicUrl(fileName);
+
+        // Create audio element to get duration
+        const audio = new Audio(URL.createObjectURL(file));
+        const duration = await new Promise<number>((resolve) => {
+          audio.addEventListener('loadedmetadata', () => {
+            resolve(audio.duration);
+          });
+        });
+
+        // Insert record into audio_files table
+        const { data: dbData, error: dbError } = await supabase
+          .from('audio_files')
+          .insert([
+            {
+              name: file.name,
+              url: publicUrl
+            }
+          ])
+          .select()
+          .single();
+
+        if (dbError) {
+          console.error('Error inserting into database:', dbError);
+          document.body.removeChild(loadingToast);
+          onErrorOpen();
+          return;
+        }
+
+        // Update local state
+        const newFile = new File([file], file.name, { type: file.type });
+        setUploadedFiles(prev => [...prev, { 
+          id: dbData.id, 
+          file: newFile,
+          duration
+        }]);
+      }
+      document.body.removeChild(loadingToast);
+      onSuccessOpen();
+    } catch (error) {
+      console.error('Error in file upload:', error);
+      const loadingToast = document.querySelector('.fixed.bottom-4.right-4');
+      if (loadingToast) document.body.removeChild(loadingToast);
+      onErrorOpen();
+    }
+  };
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragActive(false);
 
       const files = Array.from(e.dataTransfer.files);
-      const validFiles = files.filter((file) =>
-        /\.(wav|mp3|ogg|aac|m4a)$/i.test(file.name)
-      );
+      const validFiles = files.filter(isValidAudioFile);
 
       if (validFiles.length === 0) {
         onErrorOpen();
         return;
       }
 
-      setUploadedFiles((prev) => [...prev, ...validFiles]);
-      if (onFileUpload) {
-        onFileUpload(validFiles);
-      }
+      handleFileUpload(validFiles);
     },
-    [onFileUpload, onErrorOpen]
+    [onErrorOpen]
   );
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       try {
         const files = Array.from(e.target.files || []);
-        const validFiles = files.filter((file) =>
-          /\.(wav|mp3|ogg|aac|m4a)$/i.test(file.name)
-        );
+        const validFiles = files.filter(isValidAudioFile);
 
         if (validFiles.length === 0) {
           onErrorOpen();
           return;
         }
 
-        setUploadedFiles((prev) => [...prev, ...validFiles]);
-        if (onFileUpload) {
-          onFileUpload(validFiles);
-          for (const file of validFiles) {
-            await handleUploadToDB(file);
-          }
-          onSuccessOpen();
-          console.log(validFiles);
-        }
+        await handleFileUpload(validFiles);
       } catch (error) {
         console.error("Error uploading files:", error);
         onErrorOpen();
       }
     },
-    [onFileUpload, onErrorOpen, onSuccessOpen]
+    [onErrorOpen]
   );
 
-  async function handleUploadToDB(file: File) {
-    const supabase = createClient();
-    const { data, error } = await supabase.from("audio_files").insert({
-      // upload to a table
-      name: file.name,
-      url: URL.createObjectURL(file),
-    });
-
-    if (error) {
-      console.error("Error creating bucket:", error);
-      return;
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    if (selectedFileIndex === index) {
+      setSelectedFileIndex(null);
     }
+  };
 
-    const { data: uploadData, error: uploadError } = await supabase.storage // upload to storage
-      .from("audio")
-      .upload("audio", file);
+  const handleAddToTimeline = (index: number) => {
+    const file = uploadedFiles[index];
+    if (!file || !onFileUpload) return;
 
-    if (uploadError) {
-      console.error("Error uploading files:", uploadError);
-      return;
-    }
-  }
+    onFileUpload([file.file], false);
+    handleRemoveFile(index);
+  };
 
-  const handleRemoveFile = useCallback((index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const handleConvertToMidi = (index: number) => {
+    const file = uploadedFiles[index];
+    if (!file || !onFileUpload) return;
+
+    onFileUpload([file.file], true);
+  };
 
   return (
     <>
@@ -148,7 +209,13 @@ const ManageFilesModal = ({
         }}
       >
         <ModalContent>
-          <div className="p-4 text-[#bca6cf]">
+          <div className="p-4 text-[#bca6cf] flex items-center gap-2">
+            <div className="w-4 h-4 text-[#bca6cf]">
+              <svg className="animate-spin" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+            </div>
             Files uploaded successfully
           </div>
         </ModalContent>
@@ -183,7 +250,7 @@ const ManageFilesModal = ({
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+                    className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${
                       dragActive
                         ? "border-[#bca6cf] bg-[#bca6cf]/10"
                         : "border-neutral-700 hover:bg-neutral-800/50"
@@ -207,100 +274,66 @@ const ManageFilesModal = ({
                       onChange={handleFileSelect}
                     />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-lg font-medium">Your Files</h3>
-                    <div className="bg-neutral-800 rounded-lg p-4 min-h-[200px]">
-                      {uploadedFiles.length === 0 ? (
-                        <p className="text-neutral-400 text-center">
-                          No files uploaded yet
-                        </p>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {uploadedFiles.map((file, index) => (
-                            <div
-                              key={index}
-                              className={`flex items-center justify-between p-3 rounded-lg group transition-all ${
-                                selectedFileIndex === index
-                                  ? "bg-[#bca6cf]/20 ring-1 ring-[#bca6cf]"
-                                  : "bg-neutral-700/30 hover:bg-neutral-700/50"
-                              }`}
-                              onClick={() =>
-                                setSelectedFileIndex(
-                                  index === selectedFileIndex ? null : index
-                                )
-                              }
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="text-[#bca6cf]">
-                                  <BsMusicNote className="text-xl" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">{file.name}</p>
-                                  <p className="text-xs text-neutral-400">
-                                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {selectedFileIndex === index && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      className="bg-[#bca6cf]/10 hover:bg-[#bca6cf]/20 text-white rounded-xl px-3 py-1"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        // Add preview functionality
-                                      }}
-                                    >
-                                      Preview
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      className="bg-[#bca6cf]/10 hover:bg-[#bca6cf]/20 text-white rounded-xl px-3 py-1"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        // Add edit functionality
-                                      }}
-                                    >
-                                      CVM
-                                    </Button>
-                                  </>
-                                )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveFile(index);
-                                  }}
-                                  className="p-2 hover:text-red-500 transition-all"
-                                >
-                                  <BsTrash />
-                                </button>
-                              </div>
+
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold mb-3">Your Files</h3>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {uploadedFiles.map((fileEntry, index) => (
+                        <div
+                          key={fileEntry.id}
+                          className={`flex items-center justify-between p-3 rounded-xl transition-colors ${
+                            selectedFileIndex === index
+                              ? "bg-[#bca6cf]/20"
+                              : "bg-neutral-800 hover:bg-neutral-700"
+                          }`}
+                          onClick={() => setSelectedFileIndex(index)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <BsMusicNote className="text-xl text-[#bca6cf]" />
+                            <div>
+                              <p className="font-medium">{fileEntry.file.name}</p>
+                              <p className="text-sm text-neutral-400">
+                                {Math.round(fileEntry.duration)}s
+                              </p>
                             </div>
-                          ))}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-[#bca6cf] text-white"
+                              onClick={() => handleAddToTimeline(index)}
+                            >
+                              Add to Timeline
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-neutral-700 text-white"
+                              onClick={() => handleConvertToMidi(index)}
+                            >
+                              Convert to MIDI
+                            </Button>
+                            <Button
+                              isIconOnly
+                              variant="light"
+                              className="text-neutral-400 hover:text-red-500"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveFile(index);
+                              }}
+                            >
+                              <BsTrash />
+                            </Button>
+                          </div>
                         </div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 </div>
               </ModalBody>
-              <ModalFooter className="mb-4 mt-4">
-                <Button
-                  color="default"
-                  variant="flat"
-                  onPress={onClose}
-                  className="text-white bg-neutral-800 hover:bg-[#bca6cf] transition-colors rounded-2xl px-8 py-5 text-lg font-medium items-center justify-center flex text-center"
-                  size="lg"
-                >
-                  Close
-                </Button>
-              </ModalFooter>
             </>
           )}
         </ModalContent>
       </Modal>
     </>
   );
-};
-
-export default ManageFilesModal;
+}

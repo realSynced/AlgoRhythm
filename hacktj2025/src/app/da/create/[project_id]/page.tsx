@@ -563,6 +563,7 @@ export default function CreateMusic({ params }: { params: any }) {
         isOpen={isOpen}
         onOpenChange={onOpenChange}
         onFileUpload={handleFileUpload}
+        projectId={4}
       />
     </>
   );

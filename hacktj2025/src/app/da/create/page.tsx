@@ -550,6 +550,7 @@ export default function CreateMusic() {
       <ManageFilesModal
         isOpen={isOpen}
         onOpenChange={onOpenChange}
+        projectId={4}
         onFileUpload={handleFileUpload}
       />
     </>
