@@ -1,7 +1,7 @@
 "use client";
 
 import { Modal, ModalContent, ModalHeader, ModalBody, Button, useDisclosure } from "@nextui-org/react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { BsUpload, BsMusicNote, BsTrash } from "react-icons/bs";
 import { createClient } from "@/utils/supabase/client";
 
@@ -10,6 +10,7 @@ interface ManageFilesModalProps {
   onOpenChange: () => void;
   onFileUpload?: (files: File[], convertToMidi?: boolean) => void;
   projectId: number;
+  recordedFiles?: File[];
 }
 
 interface UploadedFile {
@@ -24,7 +25,8 @@ export default function ManageFilesModal({
   isOpen,
   onOpenChange,
   onFileUpload,
-  projectId
+  projectId,
+  recordedFiles = []
 }: ManageFilesModalProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -182,6 +184,88 @@ export default function ManageFilesModal({
 
     onFileUpload([file.file], true);
   };
+
+  useEffect(() => {
+    const processRecordedFiles = async () => {
+      if (recordedFiles && recordedFiles.length > 0) {
+        try {
+          const loadingToast = document.createElement('div');
+          loadingToast.className = 'fixed bottom-4 right-4 bg-neutral-800 text-white px-4 py-2 rounded-xl shadow-lg z-50 flex items-center gap-2';
+          loadingToast.innerHTML = `
+            <div class="w-4 h-4 rounded-full border-2 border-[#bca6cf] border-t-transparent animate-spin"></div>
+            <span>Processing recorded files...</span>
+          `;
+          document.body.appendChild(loadingToast);
+
+          for (const file of recordedFiles) {
+            const fileExt = file.name.split('.').pop()?.toLowerCase();
+            const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+            // Upload file to Supabase Storage
+            const { data: storageData, error: storageError } = await supabase.storage
+              .from('audio')
+              .upload(fileName, file);
+
+            if (storageError) {
+              console.error('Error uploading to storage:', storageError);
+              continue;
+            }
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+              .from('audio')
+              .getPublicUrl(fileName);
+
+            // Create audio element to get duration
+            const audio = new Audio(URL.createObjectURL(file));
+            const duration = await new Promise<number>((resolve) => {
+              audio.addEventListener('loadedmetadata', () => {
+                resolve(audio.duration);
+              });
+            });
+
+            // Insert record into audio_files table
+            const { data: dbData, error: dbError } = await supabase
+              .from('audio_files')
+              .insert([
+                {
+                  name: file.name,
+                  url: publicUrl
+                }
+              ])
+              .select()
+              .single();
+
+            if (dbError) {
+              console.error('Error inserting into database:', dbError);
+              continue;
+            }
+
+            // Update local state
+            const newFile = new File([file], file.name, { type: file.type });
+            setUploadedFiles(prev => [...prev, { 
+              id: dbData.id, 
+              file: newFile,
+              duration
+            }]);
+          }
+          
+          document.body.removeChild(loadingToast);
+          onSuccessOpen();
+        } catch (error) {
+          console.error('Error processing recorded files:', error);
+          const loadingToast = document.querySelector('.fixed.bottom-4.right-4');
+          if (loadingToast) document.body.removeChild(loadingToast);
+          onErrorOpen();
+        }
+      }
+    };
+
+    if (isOpen && recordedFiles.length > 0) {
+      processRecordedFiles();
+      // No need to clear the recorded files reference here, it's handled in the parent component
+    }
+  }, [isOpen, recordedFiles, onErrorOpen, onSuccessOpen]);
 
   return (
     <>
