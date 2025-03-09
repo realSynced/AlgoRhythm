@@ -29,6 +29,7 @@ import {
 
 import { useDisclosure } from "@nextui-org/react";
 import ManageFilesModal from "@/app/da/components/ManageFilesModal";
+import { useRouter } from "next/navigation";
 
 interface Track {
   id: number;
@@ -45,7 +46,12 @@ interface AudioFile {
   duration: number;
 }
 
-export default function CreateMusic() {
+export default function CreateMusic({ params }: { params: any }) {
+  const router = useRouter();
+  // @ts-expect-error
+  const { project_id } = React.use(params);
+
+  // console.log("Project ID:", project_id);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
@@ -456,6 +462,12 @@ export default function CreateMusic() {
                     {formatTime(currentTime).centiseconds}
                   </span>
                 </div>
+              </div>
+
+              <div>
+                <button className="px-6 py-2 border border-neutral-700/30 text-xl rounded-3xl transition-all duration-200 bg-neutral-800 hover:bg-[#bca6cf]/20 text-white">
+                  Save
+                </button>
               </div>
             </div>
           </div>
