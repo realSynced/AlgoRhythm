@@ -18,7 +18,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Muscify",
+  title: "Musify",
   description: "Musify is a music generator",
 };
 
@@ -29,7 +29,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning 
+      <body
+        suppressHydrationWarning
         className={` ${inter.variable} antialiased bg-[#0e0911]`}
       >
         {children}
