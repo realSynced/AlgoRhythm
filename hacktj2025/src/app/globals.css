@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+.scrollbar-none {
+  scrollbar-width: none;
+  scrollbar-color: transparent;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
