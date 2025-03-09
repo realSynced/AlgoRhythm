@@ -30,6 +30,7 @@ import {
 import { useDisclosure, Modal, Button } from "@nextui-org/react";
 import ManageFilesModal from "@/app/da/components/ManageFilesModal";
 import MidiPlayer from "@/app/da/components/MidiPlayer";
+import LyricToVocalsModal from "@/app/da/components/LyricToVocalsModal";
 import { useRouter } from "next/navigation";
 
 interface Track {
@@ -64,6 +65,7 @@ export default function CreateMusic({ params }: { params: any }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isManageFilesModalOpen, setIsManageFilesModalOpen] = useState(false);
+  const [isLyricToVocalsOpen, setIsLyricToVocalsOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -95,13 +97,20 @@ export default function CreateMusic({ params }: { params: any }) {
       const newAudioFiles: AudioFile[] = [];
 
       for (const file of files) {
-        const fileType = file.type || (file.name.endsWith('.mid') || file.name.endsWith('.midi') ? 'audio/midi' : '');
+        const fileType =
+          file.type ||
+          (file.name.endsWith(".mid") || file.name.endsWith(".midi")
+            ? "audio/midi"
+            : "");
         const url = URL.createObjectURL(file);
         const audio = new Audio();
-        
+
         // For MIDI files, set a default duration
-        const isMidi = fileType === 'audio/midi' || file.name.endsWith('.mid') || file.name.endsWith('.midi');
-        
+        const isMidi =
+          fileType === "audio/midi" ||
+          file.name.endsWith(".mid") ||
+          file.name.endsWith(".midi");
+
         if (isMidi) {
           // For MIDI files, use a default duration
           const newAudioFile: AudioFile = {
@@ -111,10 +120,10 @@ export default function CreateMusic({ params }: { params: any }) {
             trackId: selectedTrack.id,
             startTime: 0,
             duration: 30, // Default duration for MIDI files
-            type: 'midi'
+            type: "midi",
           };
           newAudioFiles.push(newAudioFile);
-          
+
           // Create audio element for the file
           setAudioElements((prev) => ({
             ...prev,
@@ -131,10 +140,10 @@ export default function CreateMusic({ params }: { params: any }) {
               trackId: selectedTrack.id,
               startTime: 0,
               duration: audio.duration,
-              type: 'audio'
+              type: "audio",
             };
             setAudioFiles((prev) => [...prev, newAudioFile]);
-            
+
             // Create audio element for the file
             setAudioElements((prev) => ({
               ...prev,
@@ -143,7 +152,7 @@ export default function CreateMusic({ params }: { params: any }) {
           });
         }
       }
-      
+
       if (newAudioFiles.length > 0) {
         setAudioFiles((prev) => [...prev, ...newAudioFiles]);
       }
@@ -199,7 +208,7 @@ export default function CreateMusic({ params }: { params: any }) {
   // Handle playback with optimized dependencies
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    
+
     if (isPlaying) {
       interval = setInterval(() => {
         setCurrentTime((time) => {
@@ -213,9 +222,9 @@ export default function CreateMusic({ params }: { params: any }) {
     } else if (timer) {
       clearInterval(timer);
     }
-    
+
     setTimer(interval);
-    
+
     return () => {
       if (interval) {
         clearInterval(interval);
@@ -235,7 +244,7 @@ export default function CreateMusic({ params }: { params: any }) {
       setCurrentTime(0);
       return;
     }
-    
+
     // Update audio playback based on current time
     audioFiles.forEach((file) => {
       const audio = audioElements[file.id];
@@ -250,7 +259,7 @@ export default function CreateMusic({ params }: { params: any }) {
             const playPromise = audio.play();
             // Handle play promise to avoid uncaught promise errors
             if (playPromise !== undefined) {
-              playPromise.catch(error => {
+              playPromise.catch((error) => {
                 console.error("Audio play error:", error);
               });
             }
@@ -370,6 +379,11 @@ export default function CreateMusic({ params }: { params: any }) {
     setIsManageFilesModalOpen(true);
   };
 
+  const handleLyricToVocals = (lyrics: string) => {
+    console.log("Generating vocals from lyrics:", lyrics);
+    // You'll implement the actual vocal generation logic here
+  };
+
   const handleSeek = useCallback(
     (time: number) => {
       setCurrentTime(time);
@@ -400,7 +414,9 @@ export default function CreateMusic({ params }: { params: any }) {
     );
 
     if (validFiles.length === 0) {
-      alert("Please drop valid audio files (WAV, MP3, OGG, AAC, M4A, MID, MIDI)");
+      alert(
+        "Please drop valid audio files (WAV, MP3, OGG, AAC, M4A, MID, MIDI)"
+      );
       return;
     }
 
@@ -412,7 +428,10 @@ export default function CreateMusic({ params }: { params: any }) {
       trackId,
       startTime: 0,
       duration: 0,
-      type: file.name.endsWith('.mid') || file.name.endsWith('.midi') ? 'midi' : 'audio'
+      type:
+        file.name.endsWith(".mid") || file.name.endsWith(".midi")
+          ? "midi"
+          : "audio",
     }));
 
     setAudioFiles((prev) => [...prev, ...newAudioFiles]);
@@ -473,6 +492,14 @@ export default function CreateMusic({ params }: { params: any }) {
               type="text"
             />
             <div className="flex items-center justify-center space-x-6 py-4 -translate-y-4">
+              <div className="flex items-center w-max bg-neutral-800 rounded-full">
+                <button 
+                  className="rounded-full p-3 hover:bg-[#bca6cf] transition-colors bg-neutral-700 text-white text-xl"
+                  onClick={() => setIsLyricToVocalsOpen(true)}
+                >
+                  Lyric to Vocals
+                </button>
+              </div>
               {/* Undo and Redo buttons */}
               <div className="flex items-center w-max bg-neutral-800 rounded-full">
                 <button className="rounded-l-full p-3 hover:bg-[#bca6cf] transition-colors">
@@ -660,6 +687,12 @@ export default function CreateMusic({ params }: { params: any }) {
         onFileUpload={handleFileUpload}
         projectId={4}
         recordedFiles={recordedAudioFilesRef.current}
+      />
+      <LyricToVocalsModal
+        isOpen={isLyricToVocalsOpen}
+        onOpenChange={() => setIsLyricToVocalsOpen(!isLyricToVocalsOpen)}
+        onClose={() => setIsLyricToVocalsOpen(false)}
+        onGenerateVocals={handleLyricToVocals}
       />
     </>
   );
@@ -908,9 +941,9 @@ function Timeline({
             onDragEnd={handleAudioDrop}
           >
             <div className="p-2 text-xs truncate">{file.name}</div>
-            
+
             {/* Render MIDI Player for MIDI files */}
-            {file.type === 'midi' && (
+            {file.type === "midi" && (
               <MidiPlayer
                 url={file.url}
                 trackId={file.trackId}
@@ -948,7 +981,10 @@ function TimelineRuler({
   const markerCount = useMemo(() => {
     // Ensure markerCount is always a valid positive integer
     // Default to 60 seconds (as per requirements) if duration is invalid
-    return Math.max(1, Math.ceil(isNaN(duration) || duration <= 0 ? 60 : duration));
+    return Math.max(
+      1,
+      Math.ceil(isNaN(duration) || duration <= 0 ? 60 : duration)
+    );
   }, [duration]);
 
   const timeMarkers = useMemo(() => {
