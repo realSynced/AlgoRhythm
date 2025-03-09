@@ -379,9 +379,46 @@ export default function CreateMusic({ params }: { params: any }) {
     setIsManageFilesModalOpen(true);
   };
 
-  const handleLyricToVocals = (lyrics: string) => {
-    console.log("Generating vocals from lyrics:", lyrics);
-    // You'll implement the actual vocal generation logic here
+  const handleLyricToVocals = (audioUrl: string) => {
+    console.log("Generated vocals URL:", audioUrl);
+    
+    if (!audioUrl || !selectedTrack) return;
+    
+    // Create a new audio file from the generated vocals
+    const newAudioFile: AudioFile = {
+      id: `generated-${Date.now()}`,
+      name: "Generated Vocals",
+      url: audioUrl,
+      trackId: selectedTrack.id,
+      startTime: 0,
+      duration: 30, // Default duration, will be updated when loaded
+      type: "audio"
+    };
+    
+    // Add the new audio file to the state
+    setAudioFiles((prev) => [...prev, newAudioFile]);
+    
+    // Create an audio element for the file to get its duration
+    const audio = new Audio(audioUrl);
+    audio.addEventListener("loadedmetadata", () => {
+      // Update the duration once the audio is loaded
+      setAudioFiles((prev) => 
+        prev.map(file => 
+          file.id === newAudioFile.id 
+            ? { ...file, duration: audio.duration } 
+            : file
+        )
+      );
+    });
+    
+    // Add the audio element to the audioElements state
+    setAudioElements((prev) => ({
+      ...prev,
+      [newAudioFile.id]: audio
+    }));
+    
+    // Show a success message
+    alert("Vocals generated successfully and added to your track!");
   };
 
   const handleSeek = useCallback(

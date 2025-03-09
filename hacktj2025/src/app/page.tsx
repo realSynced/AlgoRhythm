@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import Image from "next/image";
 import {
   Navbar,
   NavbarBrand,
@@ -185,6 +184,13 @@ export default function Home() {
               <span className="text-black text-xl font-bold">A</span>
             </div> */}
             <p className="font-bold text-inherit text-xl">AlgoRhythm</p>
+            <Link
+              href="https://github.com/realSynced/HackTJ-2025"
+              target="_blank"
+              className="text-[#bca6cf] hover:text-[#bca6cf]/80"
+            >
+              GitHub
+            </Link>
           </motion.div>
         </NavbarBrand>
         <NavbarContent className="hidden sm:flex gap-4" justify="center">
@@ -272,15 +278,24 @@ export default function Home() {
 
       <section id="features" className="py-20 px-4" ref={featuresRef}>
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
-          viewport={{ once: true, margin: "-100px" }}
+          viewport={{ once: true }}
           className="max-w-6xl mx-auto"
         >
-          <h2 className="text-4xl md:text-5xl font-bold text-center mb-16">
-            <span className="text-[#bca6cf]">Features</span> that inspire
-          </h2>
+          <motion.div
+            initial={{ x: 100, opacity: 0 }}
+            whileInView={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.8, type: "spring" }}
+            viewport={{ once: true }}
+            className="mb-16 text-right"
+          >
+            <h2 className="text-4xl md:text-6xl font-bold">
+              <span className="text-[#bca6cf]">Features</span> that inspire
+            </h2>
+            <div className="h-1 w-24 bg-[#bca6cf] mt-4 ml-auto rounded-full"></div>
+          </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
@@ -305,15 +320,651 @@ export default function Home() {
             ].map((feature, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
+                initial={{ y: 50, opacity: 0 }}
+                whileInView={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: i * 0.2 }}
                 viewport={{ once: true }}
+                whileHover={{ y: -10, transition: { duration: 0.2 } }}
                 className="bg-neutral-800/50 backdrop-blur-sm p-6 rounded-2xl border border-neutral-700 hover:border-[#bca6cf]/50 transition-all hover:shadow-lg hover:shadow-[#bca6cf]/10"
               >
                 <div className="text-4xl mb-4">{feature.icon}</div>
                 <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
                 <p className="text-neutral-400">{feature.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Web Interface Section - Sticky Scroll Animation */}
+      <section className="relative h-[100vh] overflow-hidden bg-neutral-900/30">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          transition={{ duration: 0.8 }}
+          viewport={{ once: true }}
+          className="sticky top-0 h-screen flex flex-col justify-center items-center px-4"
+        >
+          <div className="max-w-6xl w-full mx-auto">
+            <motion.div
+              initial={{ x: -100, opacity: 0 }}
+              whileInView={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.8, type: "spring" }}
+              viewport={{ once: true }}
+              className="mb-12"
+            >
+              <h2 className="text-4xl md:text-6xl font-bold">
+                <span className="text-[#bca6cf]">Web</span> Interface
+              </h2>
+              <div className="h-1 w-24 bg-[#bca6cf] mt-4 rounded-full"></div>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+              <motion.div
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                viewport={{ once: true }}
+              >
+                <p className="text-xl text-neutral-300 mb-6">
+                  Our powerful web interface combines modern technologies to
+                  deliver a seamless music creation experience.
+                </p>
+                <ul className="space-y-4">
+                  {[
+                    "NextJS, TypeScript, React, JSX for robust development",
+                    "NextJS SSR and Client-side rendering for optimal performance",
+                    "Audio processing for MIDI and MID files",
+                    "Framer Motion animations for engaging UI",
+                    "Supabase with PostgreSQL's realtime websocket for live updates",
+                    "Supabase storage buckets for secure file management",
+                    "React Fragments for efficient component composition",
+                  ].map((feature, i) => (
+                    <motion.li
+                      key={i}
+                      initial={{ opacity: 0, x: -20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.1 * i }}
+                      viewport={{ once: true }}
+                      className="flex items-center gap-3"
+                    >
+                      <div className="h-2 w-2 rounded-full bg-[#bca6cf]"></div>
+                      <span>{feature}</span>
+                    </motion.li>
+                  ))}
+                </ul>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                viewport={{ once: true }}
+                className="bg-neutral-800 rounded-3xl p-1 shadow-xl shadow-[#bca6cf]/10"
+              >
+                <div className="bg-neutral-900 rounded-2xl p-6 h-[350px] flex items-center justify-center overflow-hidden">
+                  <motion.div
+                    initial={{ y: 20, opacity: 0.5 }}
+                    animate={{
+                      y: [20, -20, 20],
+                      opacity: [0.5, 1, 0.5],
+                    }}
+                    transition={{
+                      duration: 5,
+                      repeat: Infinity,
+                      repeatType: "loop",
+                    }}
+                    className="text-center"
+                  >
+                    <div className="text-6xl mb-4">💻</div>
+                    <p className="text-neutral-400">Interactive UI Mockup</p>
+                  </motion.div>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Backend Section - Scroll-triggered Animation */}
+      <section className="py-20 px-4 bg-neutral-900/50 relative overflow-hidden">
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+            className="mb-16 text-center"
+          >
+            <h2 className="text-4xl md:text-6xl font-bold">
+              Machine <span className="text-[#bca6cf]">Learning</span>/Backend
+            </h2>
+            <div className="h-1 w-24 bg-[#bca6cf] mt-4 mx-auto rounded-full"></div>
+          </motion.div>
+
+          {/* Animated code block */}
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+            className="bg-neutral-800 rounded-2xl p-6 mb-12 shadow-xl shadow-black/20 overflow-hidden"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <span className="ml-2 text-neutral-400 text-sm">
+                audio2midi.py
+              </span>
+            </div>
+            <div className="font-mono text-sm overflow-x-auto">
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                viewport={{ once: true }}
+                className="text-blue-400"
+              >
+                from basic_pitch import ICASSP_2022_MODEL_PATH
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                viewport={{ once: true }}
+                className="text-blue-400"
+              >
+                import pretty_midi
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                viewport={{ once: true }}
+                className="text-blue-400"
+              >
+                def spltts(midi_data, ts):
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.6 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                instr = midi_data.instruments[0]
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.7 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                ts = sorted(ts)
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.8 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                duration = 0
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.9 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                for note in instr.notes:
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.0 }}
+                viewport={{ once: true }}
+                className="pl-8 text-green-400"
+              >
+                duration = max(duration, note.end)
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.1 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                ts = [0] + ts + [duration]
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.2 }}
+                viewport={{ once: true }}
+                className="pl-4 text-green-400"
+              >
+                # Create time intervals for joystick input
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.3 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                intervals = []
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.4 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                for i in range(len(ts) - 1):
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.5 }}
+                viewport={{ once: true }}
+                className="pl-8 text-neutral-300"
+              >
+                intervals.append((ts[i], ts[i + 1]))
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.6 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                maxinduration = [(0, 0, 0, 0) for i in range(len(intervals))]
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.7 }}
+                viewport={{ once: true }}
+                className="pl-4 text-neutral-300"
+              >
+                ninstr = pretty_midi.Instrument(program = 0)
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.8 }}
+                viewport={{ once: true }}
+                className="text-blue-400"
+              >
+                # Generate MIDI from hardware joystick input
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.9 }}
+                viewport={{ once: true }}
+                className="text-neutral-300"
+              >
+                model_output, midi_data, note_events = predict('qowp.mp3')
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 2.0 }}
+                viewport={{ once: true }}
+                className="text-neutral-300"
+              >
+                spltts(midi_data, [.9, 1.5, 2.1, 2.8, 3.4, 4.1, 4.6, 5.3, 6.3,
+                7.0, 7.6, 8.2, 8.6, 9.4, 10.1])
+              </motion.div>
+            </div>
+          </motion.div>
+
+          {/* Backend features */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true }}
+              className="space-y-8"
+            >
+              <div>
+                <h3 className="text-2xl font-semibold mb-3 flex items-center">
+                  <motion.span
+                    animate={{ rotate: [0, 360] }}
+                    transition={{
+                      duration: 5,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
+                    className="inline-block mr-3 text-[#bca6cf]"
+                  >
+                    ⚙️
+                  </motion.span>
+                  Suno API Integration
+                </h3>
+                <p className="text-neutral-400">
+                  Seamless integration with Suno's AI vocal generation API,
+                  featuring robust error handling and retry mechanisms for
+                  reliable performance.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-2xl font-semibold mb-3 flex items-center">
+                  <motion.span
+                    animate={{ rotate: [0, 360] }}
+                    transition={{
+                      duration: 5,
+                      repeat: Infinity,
+                      ease: "linear",
+                      delay: 1,
+                    }}
+                    className="inline-block mr-3 text-[#bca6cf]"
+                  >
+                    🔒
+                  </motion.span>
+                  Secure Authentication
+                </h3>
+                <p className="text-neutral-400">
+                  Environment-based API token management with secure Bearer
+                  authentication for all external API calls, protecting
+                  sensitive operations.
+                </p>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              viewport={{ once: true }}
+              className="space-y-8"
+            >
+              <div>
+                <h3 className="text-2xl font-semibold mb-3 flex items-center">
+                  <motion.span
+                    animate={{ rotate: [0, 360] }}
+                    transition={{
+                      duration: 5,
+                      repeat: Infinity,
+                      ease: "linear",
+                      delay: 2,
+                    }}
+                    className="inline-block mr-3 text-[#bca6cf]"
+                  >
+                    ⚡
+                  </motion.span>
+                  Asynchronous Processing
+                </h3>
+                <p className="text-neutral-400">
+                  Efficient task management with asynchronous processing and
+                  polling system to handle long-running operations without
+                  blocking the UI.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-2xl font-semibold mb-3 flex items-center">
+                  <motion.span
+                    animate={{ rotate: [0, 360] }}
+                    transition={{
+                      duration: 5,
+                      repeat: Infinity,
+                      ease: "linear",
+                      delay: 3,
+                    }}
+                    className="inline-block mr-3 text-[#bca6cf]"
+                  >
+                    🧠
+                  </motion.span>
+                  AI Audio Generation
+                </h3>
+                <p className="text-neutral-400">
+                  Advanced AI-powered vocal synthesis from lyrics, with
+                  customizable parameters for voice style, tempo, and emotional
+                  expression.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Animated connection lines */}
+          <div className="absolute inset-0 -z-10">
+            <svg className="w-full h-full opacity-10">
+              <motion.path
+                d="M0,100 Q400,300 800,100 T1600,300"
+                stroke="#bca6cf"
+                strokeWidth="2"
+                fill="none"
+                initial={{ pathLength: 0, opacity: 0 }}
+                whileInView={{ pathLength: 1, opacity: 1 }}
+                transition={{ duration: 2 }}
+                viewport={{ once: true }}
+              />
+              <motion.path
+                d="M100,200 Q500,50 900,200 T1700,50"
+                stroke="#bca6cf"
+                strokeWidth="2"
+                fill="none"
+                initial={{ pathLength: 0, opacity: 0 }}
+                whileInView={{ pathLength: 1, opacity: 1 }}
+                transition={{ duration: 2, delay: 0.5 }}
+                viewport={{ once: true }}
+              />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      {/* Hardware Section - Parallax Effect */}
+      <section className="py-20 px-4 bg-neutral-950 relative overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          transition={{ duration: 0.8 }}
+          viewport={{ once: true }}
+          className="max-w-6xl mx-auto relative z-10"
+        >
+          <motion.div
+            initial={{ x: 100, opacity: 0 }}
+            whileInView={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.8, type: "spring" }}
+            viewport={{ once: true }}
+            className="mb-16 text-right"
+          >
+            <h2 className="text-4xl md:text-6xl font-bold">
+              <span className="text-[#bca6cf]">Hardware</span> Integration
+            </h2>
+            <div className="h-1 w-24 bg-[#bca6cf] mt-4 ml-auto rounded-full"></div>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <motion.div
+              initial={{ x: -50, opacity: 0 }}
+              whileInView={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              viewport={{ once: true }}
+              className="bg-neutral-800/50 backdrop-blur-sm p-8 rounded-2xl border border-neutral-700 hover:border-[#bca6cf]/50 transition-all hover:shadow-lg hover:shadow-[#bca6cf]/10"
+            >
+              <h3 className="text-2xl font-semibold mb-4">
+                Custom Hardware Controller
+              </h3>
+              <ul className="space-y-3">
+                <motion.li
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    Began by breadboarding an ESP, 9-axis IMU, and Joystick
+                  </span>
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.2 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    Integrated acceleration into position
+                  </span>
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.3 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    Designed "wand" controller body
+                  </span>
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.4 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    3D printed, soldered, and used Kalman filtering to refine
+                    data (26 dimension matrix)
+                  </span>
+                </motion.li>
+              </ul>
+            </motion.div>
+
+            <motion.div
+              initial={{ x: 50, opacity: 0 }}
+              whileInView={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              viewport={{ once: true }}
+              className="relative h-[350px] overflow-hidden rounded-2xl"
+            >
+              <div className="w-full h-full bg-cover bg-center rounded-2xl" 
+                   style={{ backgroundImage: "url('/images/img_hardware.jpg')" }}>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ x: -50, opacity: 0 }}
+              whileInView={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              viewport={{ once: true }}
+              className="relative h-[350px] overflow-hidden rounded-2xl"
+            >
+              <div className="w-full h-full bg-cover bg-center rounded-2xl" 
+                   style={{ backgroundImage: "url('/images/img_hardware2.jpg')" }}>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ x: 50, opacity: 0 }}
+              whileInView={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              viewport={{ once: true }}
+              className="bg-neutral-800/50 backdrop-blur-sm p-8 rounded-2xl border border-neutral-700 hover:border-[#bca6cf]/50 transition-all hover:shadow-lg hover:shadow-[#bca6cf]/10"
+            >
+              <h3 className="text-2xl font-semibold mb-4">
+                Technical Specifications
+              </h3>
+              <ul className="space-y-3">
+                <motion.li
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    ESP32 microcontroller with WiFi connectivity
+                  </span>
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.2 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    MPU-9250 9-axis IMU (accelerometer, gyroscope, magnetometer)
+                  </span>
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.3 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    Custom PCB design with analog joystick input
+                  </span>
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.4 }}
+                  viewport={{ once: true }}
+                  className="flex items-start"
+                >
+                  <span className="text-[#bca6cf] mr-2">→</span>
+                  <span className="text-neutral-300">
+                    Real-time data processing with 100Hz sampling rate
+                  </span>
+                </motion.li>
+              </ul>
+            </motion.div>
+          </div>
+
+          {/* Floating hardware elements - parallax effect */}
+          <div className="absolute inset-0 -z-10 overflow-hidden">
+            {[...Array(6)].map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0.3 }}
+                animate={{
+                  y: [
+                    Math.random() * 100,
+                    Math.random() * -100,
+                    Math.random() * 100,
+                  ],
+                  x: [
+                    Math.random() * 100,
+                    Math.random() * -100,
+                    Math.random() * 100,
+                  ],
+                  rotate: [0, 360],
+                }}
+                transition={{
+                  duration: 20 + Math.random() * 10,
+                  repeat: Infinity,
+                  repeatType: "loop",
+                }}
+                className="absolute text-[#bca6cf]/10 text-8xl"
+                style={{
+                  top: `${Math.random() * 100}%`,
+                  left: `${Math.random() * 100}%`,
+                }}
+              >
+                {["🎛️", "🎚️", "🎧", "🎹", "🎷", "🎸"][i % 6]}
               </motion.div>
             ))}
           </div>
