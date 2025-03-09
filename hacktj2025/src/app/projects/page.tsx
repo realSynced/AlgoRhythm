@@ -12,7 +12,7 @@ export default function Projects() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link href="/da/create" className="group">
+          <Link href="/da/create/4" className="group">
             <div className="border border-zinc-800 rounded-lg p-6 hover:border-purple-500 transition-colors bg-zinc-900">
               <div className="flex items-center justify-center h-40 bg-zinc-800 rounded-md mb-4 group-hover:bg-zinc-700 transition-colors">
                 <svg

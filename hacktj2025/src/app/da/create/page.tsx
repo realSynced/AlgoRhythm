@@ -19,6 +19,13 @@ import {
   BsTrash,
 } from "react-icons/bs";
 
+import { useDisclosure } from "@nextui-org/react";
+import ManageFilesModal from "@/app/da/components/ManageFilesModal";
+import TrackLeftDesign from "@/app/da/components/TrackLeftDesign";
+import Timeline from "@/app/da/components/Timeline";
+import TimelineRuler from "@/app/da/components/TimelineRuler";
+import RecordAudioModal from "@/app/da/components/RecordAudioModal";
+
 import {
   Dropdown,
   DropdownTrigger,
@@ -27,13 +34,11 @@ import {
   DropdownItem,
 } from "@heroui/dropdown";
 
-import { useDisclosure } from "@nextui-org/react";
-import ManageFilesModal from "../components/ManageFilesModal";
-
 interface Track {
   id: number;
   name: string;
   trackType: string;
+  typeSelected: boolean;
 }
 
 interface AudioFile {
@@ -55,10 +60,14 @@ export default function CreateMusic() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
 
   // Calculate total duration based on audio files
   const totalDuration = useMemo(() => {
@@ -77,6 +86,7 @@ export default function CreateMusic() {
           id: Date.now(),
           name: `Track ${tracks.length + 1}`,
           trackType: "Audio",
+          typeSelected: false,
         };
         setTracks((prev) => [...prev, newTrack]);
 
@@ -137,6 +147,7 @@ export default function CreateMusic() {
       id: Date.now(),
       name: `Track ${tracks.length + 1}`,
       trackType: "Audio",
+      typeSelected: false,
     };
     setTracks([...tracks, newTrack]);
     setSelectedTrack(newTrack);
@@ -161,14 +172,194 @@ export default function CreateMusic() {
   const handleUpdateTrackType = (id: number, type: string) => {
     setTracks(
       tracks.map((track) =>
-        track.id === id ? { ...track, trackType: type } : track
+        track.id === id
+          ? { ...track, trackType: type, typeSelected: true }
+          : track
       )
     );
   };
 
+  // Handle recording
+  const handleRecord = async () => {
+    if (!selectedTrack || selectedTrack.trackType !== "Vocal") return;
+
+    try {
+      if (!isRecording) {
+        // Start recording
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        recordedChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            recordedChunksRef.current.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(recordedChunksRef.current, {
+            type: "audio/wav",
+          });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const duration = (Date.now() - recordingStartTime) / 1000;
+
+          // Add the recorded audio to the track
+          const newAudioFile: AudioFile = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: `recording-${Date.now()}.wav`,
+            url: audioUrl,
+            trackId: selectedTrack.id,
+            startTime: currentTime,
+            duration: duration,
+          };
+
+          setAudioFiles((prev) => [...prev, newAudioFile]);
+
+          // Create audio element for playback
+          const audio = new Audio(audioUrl);
+          setAudioElements((prev) => ({ ...prev, [newAudioFile.id]: audio }));
+
+          // Clean up
+          stream.getTracks().forEach((track) => track.stop());
+          setIsRecording(false);
+          setRecordingStartTime(0);
+        };
+
+        // Start recording
+        mediaRecorder.start();
+        setIsRecording(true);
+        setRecordingStartTime(Date.now());
+
+        // Start the timer to show recording progress
+        const recordingTimer = setInterval(() => {
+          setCurrentTime((time) => {
+            // Stop recording if we hit the end of the timeline
+            if (time >= totalDuration) {
+              if (
+                mediaRecorderRef.current &&
+                mediaRecorderRef.current.state === "recording"
+              ) {
+                mediaRecorderRef.current.stop();
+                clearInterval(recordingTimer);
+              }
+              return totalDuration;
+            }
+            return time + 0.1;
+          });
+        }, 100);
+        setTimer(recordingTimer);
+      } else {
+        // Stop recording
+        if (
+          mediaRecorderRef.current &&
+          mediaRecorderRef.current.state === "recording"
+        ) {
+          mediaRecorderRef.current.stop();
+        }
+
+        if (timer) {
+          clearInterval(timer);
+          setTimer(null);
+        }
+      }
+    } catch (error) {
+      console.error("Error recording:", error);
+      setIsRecording(false);
+      setRecordingStartTime(0);
+
+      if (timer) {
+        clearInterval(timer);
+        setTimer(null);
+      }
+    }
+  };
+
+  const handleOpenRecordModal = () => {
+    setIsRecordModalOpen(true);
+  };
+
+  const handleCloseRecordModal = () => {
+    setIsRecordModalOpen(false);
+  };
+
+  const handleAudioRecorded = (audioFile: File) => {
+    // Process the audio file and add it to the timeline
+    const newAudioFile: AudioFile = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: audioFile.name,
+      url: URL.createObjectURL(audioFile),
+      trackId: selectedTrack?.id || 0,
+      startTime: currentTime,
+      duration: 0, // Will be updated once loaded
+    };
+
+    setAudioFiles((prev) => [...prev, newAudioFile]);
+  };
+
+  // Handle playback
+  useEffect(() => {
+    if (isPlaying) {
+      // Start playback timer
+      const playbackTimer = setInterval(() => {
+        setCurrentTime((time) => {
+          if (time >= totalDuration) {
+            setIsPlaying(false);
+            return 0;
+          }
+          return time + 0.1;
+        });
+      }, 100);
+
+      // Play all audio files that should be playing at current time
+      audioFiles.forEach((file) => {
+        const audio = audioElements[file.id];
+        if (!audio) {
+          // Create new audio element if it doesn't exist
+          const newAudio = new Audio(file.url);
+          setAudioElements((prev) => ({ ...prev, [file.id]: newAudio }));
+          return;
+        }
+
+        const relativeTime = currentTime - file.startTime;
+        if (relativeTime >= 0 && relativeTime < file.duration) {
+          // Audio should be playing
+          if (audio.paused) {
+            audio.currentTime = relativeTime;
+            audio.play().catch(console.error);
+          }
+        } else {
+          // Audio should not be playing
+          if (!audio.paused) {
+            audio.pause();
+            audio.currentTime = 0;
+          }
+        }
+      });
+
+      return () => {
+        clearInterval(playbackTimer);
+        // Pause all audio when cleaning up
+        Object.values(audioElements).forEach((audio) => {
+          audio.pause();
+          audio.currentTime = 0;
+        });
+      };
+    } else {
+      // When not playing, pause all audio
+      Object.values(audioElements).forEach((audio) => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+    }
+  }, [isPlaying, currentTime, audioFiles, audioElements, totalDuration]);
+
   // Load audio elements when files change
   useEffect(() => {
-    const elements: { [key: string]: HTMLAudioElement } = {};
+    const newElements: { [key: string]: HTMLAudioElement } = {};
+
     audioFiles.forEach((file) => {
       if (!audioElements[file.id]) {
         const audio = new Audio(file.url);
@@ -179,78 +370,28 @@ export default function CreateMusic() {
             )
           );
         });
-        elements[file.id] = audio;
+        newElements[file.id] = audio;
       }
     });
-    setAudioElements((prev) => ({ ...prev, ...elements }));
+
+    if (Object.keys(newElements).length > 0) {
+      setAudioElements((prev) => ({ ...prev, ...newElements }));
+    }
 
     return () => {
-      // Cleanup old audio elements
-      Object.values(elements).forEach((audio) => {
+      // Cleanup audio elements
+      Object.values(newElements).forEach((audio) => {
         audio.pause();
-        audio.currentTime = 0;
+        audio.src = "";
       });
     };
   }, [audioFiles]);
 
-  // Handle playback
-  useEffect(() => {
-    if (isPlaying) {
-      const interval = setInterval(() => {
-        setCurrentTime((time) => {
-          if (time >= totalDuration) {
-            setIsPlaying(false);
-            // Reset all audio elements
-            Object.values(audioElements).forEach((audio) => {
-              audio.pause();
-              audio.currentTime = 0;
-            });
-            return 0;
-          }
-
-          // Update audio playback
-          audioFiles.forEach((file) => {
-            const audio = audioElements[file.id];
-            if (audio) {
-              if (
-                time >= file.startTime &&
-                time < file.startTime + file.duration
-              ) {
-                if (audio.paused) {
-                  audio.currentTime = time - file.startTime;
-                  audio.play();
-                }
-              } else {
-                audio.pause();
-                audio.currentTime = 0;
-              }
-            }
-          });
-
-          return time + 0.02; // Update every 20ms for smoother animation
-        });
-      }, 20);
-      setTimer(interval);
-    } else {
-      if (timer) {
-        clearInterval(timer);
-        setTimer(null);
-      }
-      // Pause all audio elements
-      Object.values(audioElements).forEach((audio) => {
-        audio.pause();
-      });
-    }
-    return () => {
-      if (timer) {
-        clearInterval(timer);
-      }
-    };
-  }, [isPlaying, totalDuration, audioElements, audioFiles, timer]);
-
   const handlePlay = () => {
-    setIsPlaying(true);
-    setIsRecording(false);
+    if (!isPlaying) {
+      setIsPlaying(true);
+      setIsRecording(false);
+    }
   };
 
   const handlePause = () => {
@@ -259,72 +400,46 @@ export default function CreateMusic() {
 
   const handleStop = () => {
     setIsPlaying(false);
-    setIsRecording(false);
     setCurrentTime(0);
-    // Reset all audio elements
     Object.values(audioElements).forEach((audio) => {
       audio.pause();
       audio.currentTime = 0;
     });
   };
 
-  const handleRecord = () => {
-    setIsRecording(true);
-    setIsPlaying(false);
+  const handleSeek = (time: number) => {
+    setCurrentTime(time);
+    if (isPlaying) {
+      Object.values(audioElements).forEach((audio) => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+    }
   };
 
-  const handleSeek = useCallback(
-    (time: number) => {
-      setCurrentTime(time);
-      // Update audio positions
-      audioFiles.forEach((file) => {
-        const audio = audioElements[file.id];
-        if (audio) {
-          if (time >= file.startTime && time < file.startTime + file.duration) {
-            audio.currentTime = time - file.startTime;
-            if (isPlaying) {
-              audio.play();
-            }
-          } else {
-            audio.pause();
-            audio.currentTime = 0;
-          }
-        }
-      });
+  const handleFileDrop = useCallback(
+    (trackId: number, files: FileList) => {
+      const audioFiles = Array.from(files).filter((file) =>
+        [
+          "audio/wav",
+          "audio/mp3",
+          "audio/mpeg",
+          "audio/ogg",
+          "audio/aac",
+          "audio/m4a",
+        ].includes(file.type)
+      );
+      handleFileUpload(audioFiles);
     },
-    [audioElements, audioFiles, isPlaying]
+    [handleFileUpload]
   );
 
-  const handleFileDrop = useCallback((e: React.DragEvent, trackId: number) => {
-    e.preventDefault();
-    const files = Array.from(e.dataTransfer.files);
-    const validFiles = files.filter((file) =>
-      /\.(wav|mp3|ogg|aac|m4a)$/i.test(file.name)
-    );
-
-    if (validFiles.length === 0) {
-      alert("Please drop valid audio files (WAV, MP3, OGG, AAC, M4A)");
-      return;
-    }
-
-    // Create new audio files
-    const newAudioFiles: AudioFile[] = validFiles.map((file) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      url: URL.createObjectURL(file),
-      trackId,
-      startTime: 0,
-      duration: 0,
-    }));
-
-    setAudioFiles((prev) => [...prev, ...newAudioFiles]);
-  }, []);
-
+  // Handle audio movement
   const handleAudioMove = useCallback(
-    (fileId: string, trackId: number, startTime: number) => {
+    (fileId: string, newStartTime: number) => {
       setAudioFiles((prev) =>
         prev.map((file) =>
-          file.id === fileId ? { ...file, trackId, startTime } : file
+          file.id === fileId ? { ...file, startTime: newStartTime } : file
         )
       );
     },
@@ -363,10 +478,6 @@ export default function CreateMusic() {
                 Digital Audio Workstation
               </p>
             </div>
-            {/* <p className="text-sm text-neutral-400">
-            Click on the canvas to create a new track. You can then drag and
-            drop the track to move it around.
-          </p> */}
           </div>
           <div className="mb-auto flex flex-col items-center space-y-6 gap-2 w-full h-full">
             <input
@@ -417,28 +528,19 @@ export default function CreateMusic() {
                 </button>
                 <div className="w-px h-8 bg-neutral-700/30" />
                 <button
+                  className={`p-3 transition-all duration-200 ${isRecording ? "bg-red-500 text-white" : "hover:bg-[#bca6cf]/20 text-white"}`}
+                  onClick={() => {
+                    setIsRecordModalOpen(true);
+                  }}
+                >
+                  <BsRecordFill className="text-3xl" />
+                </button>
+                <div className="w-px h-8 bg-neutral-700/30" />
+                <button
                   className="p-3 transition-all duration-200 hover:bg-[#bca6cf]/20 text-white"
                   onClick={handleStop}
                 >
                   <BsStopFill className="text-3xl" />
-                </button>
-                <div className="w-px h-8 bg-neutral-700/30" />
-                <button
-                  className={`p-3 rounded-r-3xl transition-all duration-200 ${
-                    isRecording
-                      ? "bg-[#bca6cf] text-neutral-900 shadow-inner"
-                      : "hover:bg-[#bca6cf]/20 text-white"
-                  }`}
-                  onClick={handleRecord}
-                  disabled={isRecording}
-                >
-                  <BsRecordFill
-                    className={`text-3xl transition-all duration-200 ${
-                      isRecording
-                        ? "text-red-600 animate-pulse scale-105"
-                        : "text-red-500 hover:text-red-400"
-                    }`}
-                  />
                 </button>
               </div>
               {/* Time display */}
@@ -494,11 +596,16 @@ export default function CreateMusic() {
                         id={track.id}
                         name={track.name}
                         trackType={track.trackType}
+                        typeSelected={track.typeSelected}
                         isSelected={selectedTrack?.id === track.id}
+                        isRecording={
+                          isRecording && selectedTrack?.id === track.id
+                        }
                         onSelect={() => setSelectedTrack(track)}
                         onDelete={handleDeleteTrack}
                         onUpdateName={handleUpdateTrackName}
                         onUpdateTrackType={handleUpdateTrackType}
+                        onRecord={handleRecord}
                       />
                     ))}
                   </div>
@@ -550,499 +657,14 @@ export default function CreateMusic() {
       <ManageFilesModal
         isOpen={isOpen}
         onOpenChange={onOpenChange}
+        projectId={4}
         onFileUpload={handleFileUpload}
       />
+      <RecordAudioModal
+        isOpen={isRecordModalOpen}
+        onClose={() => setIsRecordModalOpen(false)}
+        onAudioRecorded={handleAudioRecorded}
+      />
     </>
-  );
-}
-
-// FindTrackLeftDesign
-function TrackLeftDesign({
-  id,
-  name,
-  trackType,
-  isSelected,
-  onSelect,
-  onDelete,
-  onUpdateName,
-  onUpdateTrackType,
-}: {
-  id: number;
-  name: string;
-  trackType: string;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDelete: (id: number) => void;
-  onUpdateName: (id: number, name: string) => void;
-  onUpdateTrackType: (id: number, type: string) => void;
-}) {
-  const [inputValue, setInputValue] = React.useState(name);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  const [isEditing, setIsEditing] = React.useState(false);
-
-  const handleDelete = () => {
-    setIsDeleting(true);
-    setTimeout(() => {
-      onDelete(id);
-    }, 200);
-  };
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newName = e.target.value;
-    setInputValue(newName);
-    onUpdateName(id, newName);
-  };
-
-  const handleFocus = () => {
-    setIsEditing(true);
-  };
-
-  const handleBlur = () => {
-    setIsEditing(false);
-    if (inputValue.trim() === "") {
-      setInputValue(name);
-      onUpdateName(id, name);
-    }
-  };
-
-  return (
-    <div
-      className={`w-full h-[8rem] text-white transition-all duration-200 ${
-        isDeleting ? "opacity-50 scale-95" : ""
-      } ${
-        isSelected
-          ? "bg-[#bca6cf]/20 hover:bg-[#bca6cf]/30"
-          : "bg-neutral-800 hover:bg-neutral-700"
-      }`}
-      onClick={onSelect}
-    >
-      <div className="flex items-center justify-between p-4">
-        <div className="flex justify-between w-full items-center">
-          <div className="flex items-center">
-            <div className="flex items-center gap-2">
-              <div className="relative items-center flex">
-                <div className="flex flex-col">
-                  <input
-                    type="text"
-                    className={`text-2xl font-bold outline-none min-w-[8rem] w-[6.5rem] bg-transparent px-2 py-1 rounded transition-all ${
-                      isEditing
-                        ? "bg-neutral-700/50 ring-2 ring-[#bca6cf]"
-                        : "hover:bg-neutral-700/50"
-                    }`}
-                    value={inputValue}
-                    onChange={handleNameChange}
-                    onFocus={handleFocus}
-                    onBlur={handleBlur}
-                    maxLength={10}
-                    placeholder="Track Name"
-                  />
-                  <Dropdown>
-                    <DropdownTrigger>
-                      <button className="text-xs text-neutral-400 bg-neutral-700/50 rounded px-2 py-1 hover:bg-neutral-700">
-                        Choose Track Type
-                      </button>
-                    </DropdownTrigger>
-                    <DropdownMenu>
-                      <DropdownSection className="bg-neutral-700 px-2">
-                        <DropdownItem
-                          key="audio"
-                          onClick={() => onUpdateTrackType(id, "Audio")}
-                          className="text-white hover:bg-neutral-600 w-full"
-                        >
-                          Audio
-                        </DropdownItem>
-                        <DropdownItem
-                          key="vocal"
-                          onClick={() => onUpdateTrackType(id, "Vocal")}
-                          className="text-white hover:bg-neutral-600 w-full"
-                        >
-                          Vocal
-                        </DropdownItem>
-                        <DropdownItem
-                          key="midi"
-                          onClick={() => onUpdateTrackType(id, "Midi")}
-                          className="text-white hover:bg-neutral-600 w-full"
-                        >
-                          Midi
-                        </DropdownItem>
-                      </DropdownSection>
-                    </DropdownMenu>
-                  </Dropdown>
-                </div>
-
-                {/* {isEditing && (
-                  <div className="absolute -bottom-4 right-0 text-xs text-neutral-400">
-                    {10 - inputValue.length} chars left
-                  </div>
-                )} */}
-              </div>
-              <button
-                onClick={handleDelete}
-                className="flex items-center rounded-full p-2 font-bold text-white bg-neutral-700 hover:bg-red-500 transition-colors"
-                disabled={isDeleting}
-              >
-                <BsTrash className="text-lg" />
-              </button>
-            </div>
-          </div>
-          <div className="text-sm text-neutral-400">
-            <p>Type: {trackType}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Timeline({
-  trackId,
-  files,
-  onFileDrop,
-  onAudioMove,
-}: {
-  trackId: number;
-  files: AudioFile[];
-  onFileDrop: (e: React.DragEvent, trackId: number) => void;
-  onAudioMove: (fileId: string, trackId: number, startTime: number) => void;
-}) {
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const timelineRef = useRef<HTMLDivElement>(null);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    setIsDraggingOver(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDraggingOver(false);
-      onFileDrop(e, trackId);
-    },
-    [onFileDrop, trackId]
-  );
-
-  const handleAudioDragStart = useCallback(
-    (e: React.DragEvent, fileId: string) => {
-      e.dataTransfer.setData("text/plain", fileId);
-    },
-    []
-  );
-
-  const handleAudioDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      const fileId = e.dataTransfer.getData("text/plain");
-      if (!timelineRef.current) return;
-
-      const rect = timelineRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const startTime = Math.max(0, Math.round((x / 100) * 2) / 2); // Snap to 0.5s intervals
-
-      onAudioMove(fileId, trackId, startTime);
-    },
-    [onAudioMove, trackId]
-  );
-
-  return (
-    <div
-      ref={timelineRef}
-      className={`w-full h-[8rem] bg-neutral-800 text-white transition-colors relative ${
-        isDraggingOver ? "bg-[#bca6cf]/10" : "hover:bg-neutral-700"
-      }`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleAudioDrop}
-    >
-      {/* Grid lines for time markers */}
-      <div className="absolute inset-0 pointer-events-none">
-        {Array.from({ length: 120 }).map((_, i) => (
-          <div
-            key={i}
-            className={`absolute top-0 bottom-0 w-px bg-neutral-700 ${
-              i % 2 === 0 ? "opacity-30" : "opacity-10"
-            }`}
-            style={{ left: `${i * 50}px` }}
-          />
-        ))}
-      </div>
-
-      {/* Drop zone indicator */}
-      {files.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-neutral-500 text-sm border-2 border-dashed border-neutral-700 m-4 rounded-lg">
-          Drop audio files here
-        </div>
-      )}
-
-      {/* Audio clips */}
-      <div className="absolute inset-0 p-4">
-        {files.map((file) => (
-          <div
-            key={file.id}
-            className="absolute top-0 h-[calc(100%-2rem)] bg-[#bca6cf]/20 rounded-lg cursor-move group"
-            style={{
-              left: `${file.startTime * 100}px`,
-              width: `${Math.max(file.duration * 100, 200)}px`,
-            }}
-            draggable
-            onDragStart={(e) => handleAudioDragStart(e, file.id)}
-          >
-            {/* Waveform visualization */}
-            <div className="absolute inset-x-0 bottom-0 h-12 px-3">
-              <div className="relative h-full">
-                <div className="absolute inset-0 flex items-center justify-between">
-                  {Array.from({ length: 50 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-0.5 bg-[#bca6cf]/30 rounded-full transition-all duration-200"
-                      style={{
-                        height: `${30 + Math.sin(i * 0.5) * 20}%`,
-                        opacity: isDraggingOver ? 0.5 : 0.3,
-                        transform: isDraggingOver ? "scaleY(1.1)" : "scaleY(1)",
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* File info */}
-            <div className="p-3">
-              <div className="text-sm font-medium truncate text-white">
-                {file.name}
-              </div>
-              <div className="text-xs text-neutral-400">
-                {file.duration.toFixed(1)}s
-              </div>
-            </div>
-
-            {/* Hover effect */}
-            <div className="absolute inset-0 ring-2 ring-[#bca6cf]/0 group-hover:ring-[#bca6cf]/30 rounded-lg transition-all" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TimelineRuler({
-  playing,
-  currentTime,
-  duration,
-  onSeek,
-  onScroll,
-  scrollPosition,
-}: {
-  playing: boolean;
-  currentTime: number;
-  duration: number;
-  onSeek: (time: number) => void;
-  onScroll: (e: React.UIEvent<HTMLDivElement>) => void;
-  scrollPosition: number;
-}) {
-  const timelineRef = useRef<HTMLDivElement>(null);
-
-  // Calculate number of markers needed based on duration
-  const markerCount = useMemo(() => {
-    return Math.ceil(duration); // One marker per second
-  }, [duration]);
-
-  const timeMarkers = useMemo(() => {
-    return Array.from({ length: markerCount }, (_, i) => i);
-  }, [markerCount]);
-
-  const minorMarkers = Array.from({ length: 4 }, (_, i) => i);
-
-  const playheadPosition = useMemo(() => {
-    return currentTime * 100;
-  }, [currentTime]);
-
-  // Keep timeline ruler in sync with tracks
-  useEffect(() => {
-    if (timelineRef.current) {
-      timelineRef.current.scrollLeft = scrollPosition;
-    }
-  }, [scrollPosition]);
-
-  const handleTimelineClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (playing || !timelineRef.current) return;
-      const rect = timelineRef.current.getBoundingClientRect();
-      const scrollLeft = timelineRef.current.scrollLeft;
-      const x = Math.max(
-        0,
-        Math.min(
-          e.clientX - rect.left + scrollLeft,
-          timelineRef.current.scrollWidth
-        )
-      );
-      onSeek(x / 100); // Convert pixels to seconds (100px = 1s)
-
-      // Auto-scroll when dragging near edges
-      const edgeThreshold = 50;
-      if (e.clientX - rect.left < edgeThreshold) {
-        timelineRef.current.scrollLeft -= 10;
-      } else if (rect.right - e.clientX < edgeThreshold) {
-        timelineRef.current.scrollLeft += 10;
-      }
-    },
-    [playing, onSeek]
-  );
-
-  // Auto-scroll to playhead when it goes out of view
-  useEffect(() => {
-    if (!timelineRef.current || !playing) return;
-    const timeline = timelineRef.current;
-    const playheadX = playheadPosition;
-
-    if (
-      playheadX < timeline.scrollLeft ||
-      playheadX > timeline.scrollLeft + timeline.clientWidth
-    ) {
-      const newScrollLeft = playheadX - timeline.clientWidth / 2;
-      timeline.scrollLeft = newScrollLeft;
-      onScroll({
-        currentTarget: { scrollLeft: newScrollLeft },
-      } as React.UIEvent<HTMLDivElement>);
-    }
-  }, [playheadPosition, playing, onScroll]);
-
-  return (
-    <div
-      ref={timelineRef}
-      className="w-full h-[4rem] bg-neutral-800/50 text-white border-b border-neutral-700 relative select-none overflow-x-auto"
-      onClick={handleTimelineClick}
-      onScroll={onScroll}
-    >
-      <div
-        className="absolute inset-0 flex items-end"
-        style={{ minWidth: `${markerCount * 100}px` }}
-      >
-        {timeMarkers.map((marker) => (
-          <div
-            key={marker}
-            className="flex-shrink-0 flex flex-col items-center relative"
-            style={{ width: "100px" }}
-          >
-            {/* Major marker */}
-            <div className="w-px bg-neutral-600 h-4 mb-1" />
-            <div className="text-xs text-neutral-400 mb-2 font-medium">
-              {String(Math.floor(marker / 60)).padStart(2, "0")}:
-              {String(marker % 60).padStart(2, "0")}
-            </div>
-            {/* Minor markers */}
-            <div className="absolute top-0 left-0 right-0 flex justify-between px-5">
-              {minorMarkers.map((minor) => (
-                <div
-                  key={minor}
-                  className="w-px bg-neutral-700 h-2"
-                  style={{
-                    transform: `translateX(${(minor + 1) * 20}px)`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <Playhead
-        position={playheadPosition}
-        isPlaying={playing}
-        onSeek={onSeek}
-      />
-      {/* Hover effect overlay */}
-      <div className="absolute inset-0 bg-neutral-700/0 hover:bg-neutral-700/10 transition-colors duration-200" />
-    </div>
-  );
-}
-
-function Playhead({
-  position,
-  isPlaying,
-  onSeek,
-}: {
-  position: number;
-  isPlaying: boolean;
-  onSeek: (time: number) => void;
-}) {
-  const [isDragging, setIsDragging] = useState(false);
-  const playheadRef = useRef<HTMLDivElement>(null);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (isPlaying) return;
-    setIsDragging(true);
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging || !playheadRef.current) return;
-      const timeline = playheadRef.current.parentElement;
-      if (!timeline) return;
-
-      const rect = timeline.getBoundingClientRect();
-      const scrollLeft = timeline.scrollLeft;
-      const x = Math.max(
-        0,
-        Math.min(e.clientX - rect.left + scrollLeft, timeline.scrollWidth)
-      );
-      onSeek(x / 100); // Convert pixels to seconds (100px = 1s)
-
-      // Auto-scroll when dragging near edges
-      const edgeThreshold = 50;
-      if (e.clientX - rect.left < edgeThreshold) {
-        timeline.scrollLeft -= 10;
-      } else if (rect.right - e.clientX < edgeThreshold) {
-        timeline.scrollLeft += 10;
-      }
-    },
-    [isDragging, onSeek]
-  );
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    document.removeEventListener("mousemove", handleMouseMove);
-    document.removeEventListener("mouseup", handleMouseUp);
-  }, [handleMouseMove]);
-
-  useEffect(() => {
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [handleMouseMove, handleMouseUp]);
-
-  return (
-    <div
-      ref={playheadRef}
-      className={`absolute top-0 bottom-0 w-0.5 bg-[#bca6cf] z-10 transition-transform ${
-        isDragging || isPlaying
-          ? "duration-[20ms] ease-linear"
-          : "duration-200 ease-out"
-      } cursor-ew-resize group`}
-      style={{
-        transform: `translateX(${position}px)`,
-      }}
-      onMouseDown={handleMouseDown}
-    >
-      <div
-        className={`w-3 h-3 bg-[#bca6cf] rounded-full -translate-x-1/2 absolute -bottom-1.5 shadow-lg transition-transform ${
-          isDragging ? "scale-150" : "group-hover:scale-125"
-        }`}
-      />
-      {/* Hover guide */}
-      <div
-        className={`absolute inset-y-0 left-1/2 w-px bg-[#bca6cf] opacity-0 transition-opacity ${
-          isDragging
-            ? "opacity-20 h-screen -top-screen"
-            : "group-hover:opacity-10"
-        }`}
-      />
-    </div>
   );
 }

@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Musify",
-  description: "Musify is a music generator",
+  title: "AlgoRhythm",
+  description: "AlgoRhythm is a music generator",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -27,8 +27,10 @@ import {
   DropdownItem,
 } from "@heroui/dropdown";
 
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure, Modal, Button } from "@nextui-org/react";
 import ManageFilesModal from "@/app/da/components/ManageFilesModal";
+import MidiPlayer from "@/app/da/components/MidiPlayer";
+import LyricToVocalsModal from "@/app/da/components/LyricToVocalsModal";
 import { useRouter } from "next/navigation";
 
 interface Track {
@@ -44,6 +46,7 @@ interface AudioFile {
   trackId: number;
   startTime: number;
   duration: number;
+  type?: string;
 }
 
 export default function CreateMusic({ params }: { params: any }) {
@@ -61,81 +64,100 @@ export default function CreateMusic({ params }: { params: any }) {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isManageFilesModalOpen, setIsManageFilesModalOpen] = useState(false);
+  const [isLyricToVocalsOpen, setIsLyricToVocalsOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordedAudioFilesRef = useRef<File[]>([]);
+  const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
 
   // Calculate total duration based on audio files
   const totalDuration = useMemo(() => {
-    const maxAudioEnd = audioFiles.reduce((max, file) => {
+    let maxEndTime = 60; // Default 60 seconds duration as per requirements
+    audioFiles.forEach((file) => {
       const endTime = file.startTime + file.duration;
-      return Math.max(max, endTime);
-    }, 0);
-    return Math.max(maxAudioEnd + 30, 60); // At least 60 seconds, plus 30 seconds buffer
+      if (endTime > maxEndTime) {
+        maxEndTime = endTime;
+      }
+    });
+    return maxEndTime;
   }, [audioFiles]);
 
   const handleFileUpload = useCallback(
-    (files: File[]) => {
+    (files: File[], convertToMidi?: boolean) => {
       if (!selectedTrack) {
-        // Create a new track if none is selected
-        const newTrack: Track = {
-          id: Date.now(),
-          name: `Track ${tracks.length + 1}`,
-          trackType: "Audio",
-        };
-        setTracks((prev) => [...prev, newTrack]);
+        alert("Please select a track first");
+        return;
+      }
 
-        // Create audio files for the new track
-        const newAudioFiles: AudioFile[] = files.map((file) => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: file.name,
-          url: URL.createObjectURL(file),
-          trackId: newTrack.id,
-          startTime: 0,
-          duration: 0,
-        }));
-        setAudioFiles((prev) => [...prev, ...newAudioFiles]);
+      const newAudioFiles: AudioFile[] = [];
 
-        // Load audio durations
-        files.forEach((file, index) => {
-          const audio = new Audio(URL.createObjectURL(file));
+      for (const file of files) {
+        const fileType =
+          file.type ||
+          (file.name.endsWith(".mid") || file.name.endsWith(".midi")
+            ? "audio/midi"
+            : "");
+        const url = URL.createObjectURL(file);
+        const audio = new Audio();
+
+        // For MIDI files, set a default duration
+        const isMidi =
+          fileType === "audio/midi" ||
+          file.name.endsWith(".mid") ||
+          file.name.endsWith(".midi");
+
+        if (isMidi) {
+          // For MIDI files, use a default duration
+          const newAudioFile: AudioFile = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            url,
+            trackId: selectedTrack.id,
+            startTime: 0,
+            duration: 30, // Default duration for MIDI files
+            type: "midi",
+          };
+          newAudioFiles.push(newAudioFile);
+
+          // Create audio element for the file
+          setAudioElements((prev) => ({
+            ...prev,
+            [newAudioFile.id]: audio,
+          }));
+        } else {
+          // For regular audio files
+          audio.src = url;
           audio.addEventListener("loadedmetadata", () => {
-            setAudioFiles((prev) =>
-              prev.map((af, i) =>
-                i === index ? { ...af, duration: audio.duration } : af
-              )
-            );
-          });
-        });
-      } else {
-        // Add files to selected track
-        const newAudioFiles: AudioFile[] = files.map((file) => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: file.name,
-          url: URL.createObjectURL(file),
-          trackId: selectedTrack.id,
-          startTime: 0,
-          duration: 0,
-        }));
-        setAudioFiles((prev) => [...prev, ...newAudioFiles]);
+            const newAudioFile: AudioFile = {
+              id: Math.random().toString(36).substr(2, 9),
+              name: file.name,
+              url,
+              trackId: selectedTrack.id,
+              startTime: 0,
+              duration: audio.duration,
+              type: "audio",
+            };
+            setAudioFiles((prev) => [...prev, newAudioFile]);
 
-        // Load audio durations
-        files.forEach((file, index) => {
-          const audio = new Audio(URL.createObjectURL(file));
-          audio.addEventListener("loadedmetadata", () => {
-            setAudioFiles((prev) =>
-              prev.map((af) =>
-                af.id === newAudioFiles[index].id
-                  ? { ...af, duration: audio.duration }
-                  : af
-              )
-            );
+            // Create audio element for the file
+            setAudioElements((prev) => ({
+              ...prev,
+              [newAudioFile.id]: audio,
+            }));
           });
-        });
+        }
+      }
+
+      if (newAudioFiles.length > 0) {
+        setAudioFiles((prev) => [...prev, ...newAudioFiles]);
       }
     },
-    [selectedTrack, tracks.length]
+    [selectedTrack]
   );
 
   const handleAddTrack = () => {
@@ -172,87 +194,83 @@ export default function CreateMusic({ params }: { params: any }) {
     );
   };
 
-  // Load audio elements when files change
+  // Load audio elements when audio files change
   useEffect(() => {
-    const elements: { [key: string]: HTMLAudioElement } = {};
-    audioFiles.forEach((file) => {
-      if (!audioElements[file.id]) {
-        const audio = new Audio(file.url);
-        audio.addEventListener("loadedmetadata", () => {
-          setAudioFiles((prev) =>
-            prev.map((af) =>
-              af.id === file.id ? { ...af, duration: audio.duration } : af
-            )
-          );
-        });
-        elements[file.id] = audio;
-      }
-    });
-    setAudioElements((prev) => ({ ...prev, ...elements }));
-
+    // Cleanup function to prevent memory leaks
     return () => {
-      // Cleanup old audio elements
-      Object.values(elements).forEach((audio) => {
+      Object.values(audioElements).forEach((audio) => {
         audio.pause();
         audio.currentTime = 0;
       });
     };
   }, [audioFiles]);
 
-  // Handle playback
+  // Handle playback with optimized dependencies
   useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
     if (isPlaying) {
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         setCurrentTime((time) => {
           if (time >= totalDuration) {
-            setIsPlaying(false);
-            // Reset all audio elements
-            Object.values(audioElements).forEach((audio) => {
-              audio.pause();
-              audio.currentTime = 0;
-            });
-            return 0;
+            // We'll handle stopping outside this callback to avoid nested state updates
+            return totalDuration;
           }
-
-          // Update audio playback
-          audioFiles.forEach((file) => {
-            const audio = audioElements[file.id];
-            if (audio) {
-              if (
-                time >= file.startTime &&
-                time < file.startTime + file.duration
-              ) {
-                if (audio.paused) {
-                  audio.currentTime = time - file.startTime;
-                  audio.play();
-                }
-              } else {
-                audio.pause();
-                audio.currentTime = 0;
-              }
-            }
-          });
-
           return time + 0.02; // Update every 20ms for smoother animation
         });
       }, 20);
-      setTimer(interval);
-    } else {
-      if (timer) {
-        clearInterval(timer);
-        setTimer(null);
-      }
-      // Pause all audio elements
-      Object.values(audioElements).forEach((audio) => {
-        audio.pause();
-      });
+    } else if (timer) {
+      clearInterval(timer);
     }
+
+    setTimer(interval);
+
     return () => {
-      if (timer) {
-        clearInterval(timer);
+      if (interval) {
+        clearInterval(interval);
       }
     };
-  }, [isPlaying, totalDuration, audioElements, audioFiles, timer]);
+  }, [isPlaying, totalDuration]); // Removed audioElements, audioFiles, and timer
+
+  // Handle audio playback separately based on current time
+  useEffect(() => {
+    if (currentTime >= totalDuration && isPlaying) {
+      setIsPlaying(false);
+      // Reset all audio elements
+      Object.values(audioElements).forEach((audio) => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+      setCurrentTime(0);
+      return;
+    }
+
+    // Update audio playback based on current time
+    audioFiles.forEach((file) => {
+      const audio = audioElements[file.id];
+      if (audio) {
+        if (
+          currentTime >= file.startTime &&
+          currentTime < file.startTime + file.duration &&
+          isPlaying
+        ) {
+          if (audio.paused) {
+            audio.currentTime = currentTime - file.startTime;
+            const playPromise = audio.play();
+            // Handle play promise to avoid uncaught promise errors
+            if (playPromise !== undefined) {
+              playPromise.catch((error) => {
+                console.error("Audio play error:", error);
+              });
+            }
+          }
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      }
+    });
+  }, [currentTime, isPlaying, audioElements, audioFiles, totalDuration]);
 
   const handlePlay = () => {
     setIsPlaying(true);
@@ -274,9 +292,133 @@ export default function CreateMusic({ params }: { params: any }) {
     });
   };
 
-  const handleRecord = () => {
-    setIsRecording(true);
-    setIsPlaying(false);
+  const handleRecord = async () => {
+    if (!isRecording) {
+      if (!selectedTrack) {
+        alert("Please select a track first");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        recordedChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            recordedChunksRef.current.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(recordedChunksRef.current, {
+            type: "audio/wav",
+          });
+          const audioFile = new File(
+            [audioBlob],
+            `recording-${Date.now()}.wav`,
+            {
+              type: "audio/wav",
+            }
+          );
+
+          // Store the recorded file for the ManageFilesModal
+          recordedAudioFilesRef.current = [
+            ...recordedAudioFilesRef.current,
+            audioFile,
+          ];
+
+          // Create audio URL for playback
+          const audioUrl = URL.createObjectURL(audioBlob);
+
+          // Calculate duration
+          const audio = new Audio(audioUrl);
+          audio.addEventListener("loadedmetadata", () => {
+            // Add to audio files with calculated duration
+            const newAudioFile: AudioFile = {
+              id: Math.random().toString(36).substr(2, 9),
+              name: audioFile.name,
+              url: audioUrl,
+              trackId: selectedTrack!.id,
+              startTime: recordingStartTime,
+              duration: audio.duration,
+            };
+
+            // Add to audio files state
+            setAudioFiles((prev) => [...prev, newAudioFile]);
+
+            // Create audio element for playback
+            setAudioElements((prev) => ({ ...prev, [newAudioFile.id]: audio }));
+          });
+
+          // Stop all tracks
+          stream.getTracks().forEach((track) => track.stop());
+        };
+
+        // Start recording
+        mediaRecorder.start();
+        setRecordingStartTime(currentTime);
+        setIsRecording(true);
+      } catch (error) {
+        console.error("Error starting recording:", error);
+        alert("Could not access microphone. Please check permissions.");
+      }
+    } else {
+      // Stop recording
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      }
+    }
+  };
+
+  const handleManageFiles = () => {
+    setIsManageFilesModalOpen(true);
+  };
+
+  const handleLyricToVocals = (audioUrl: string) => {
+    console.log("Generated vocals URL:", audioUrl);
+    
+    if (!audioUrl || !selectedTrack) return;
+    
+    // Create a new audio file from the generated vocals
+    const newAudioFile: AudioFile = {
+      id: `generated-${Date.now()}`,
+      name: "Generated Vocals",
+      url: audioUrl,
+      trackId: selectedTrack.id,
+      startTime: 0,
+      duration: 30, // Default duration, will be updated when loaded
+      type: "audio"
+    };
+    
+    // Add the new audio file to the state
+    setAudioFiles((prev) => [...prev, newAudioFile]);
+    
+    // Create an audio element for the file to get its duration
+    const audio = new Audio(audioUrl);
+    audio.addEventListener("loadedmetadata", () => {
+      // Update the duration once the audio is loaded
+      setAudioFiles((prev) => 
+        prev.map(file => 
+          file.id === newAudioFile.id 
+            ? { ...file, duration: audio.duration } 
+            : file
+        )
+      );
+    });
+    
+    // Add the audio element to the audioElements state
+    setAudioElements((prev) => ({
+      ...prev,
+      [newAudioFile.id]: audio
+    }));
+    
+    // Show a success message
+    alert("Vocals generated successfully and added to your track!");
   };
 
   const handleSeek = useCallback(
@@ -305,11 +447,13 @@ export default function CreateMusic({ params }: { params: any }) {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
     const validFiles = files.filter((file) =>
-      /\.(wav|mp3|ogg|aac|m4a)$/i.test(file.name)
+      /\.(wav|mp3|ogg|aac|m4a|mid|midi)$/i.test(file.name)
     );
 
     if (validFiles.length === 0) {
-      alert("Please drop valid audio files (WAV, MP3, OGG, AAC, M4A)");
+      alert(
+        "Please drop valid audio files (WAV, MP3, OGG, AAC, M4A, MID, MIDI)"
+      );
       return;
     }
 
@@ -321,6 +465,10 @@ export default function CreateMusic({ params }: { params: any }) {
       trackId,
       startTime: 0,
       duration: 0,
+      type:
+        file.name.endsWith(".mid") || file.name.endsWith(".midi")
+          ? "midi"
+          : "audio",
     }));
 
     setAudioFiles((prev) => [...prev, ...newAudioFiles]);
@@ -381,6 +529,14 @@ export default function CreateMusic({ params }: { params: any }) {
               type="text"
             />
             <div className="flex items-center justify-center space-x-6 py-4 -translate-y-4">
+              <div className="flex items-center w-max bg-neutral-800 rounded-full">
+                <button 
+                  className="rounded-full p-3 hover:bg-[#bca6cf] transition-colors bg-neutral-700 text-white text-xl"
+                  onClick={() => setIsLyricToVocalsOpen(true)}
+                >
+                  Lyric to Vocals
+                </button>
+              </div>
               {/* Undo and Redo buttons */}
               <div className="flex items-center w-max bg-neutral-800 rounded-full">
                 <button className="rounded-l-full p-3 hover:bg-[#bca6cf] transition-colors">
@@ -436,7 +592,7 @@ export default function CreateMusic({ params }: { params: any }) {
                       : "hover:bg-[#bca6cf]/20 text-white"
                   }`}
                   onClick={handleRecord}
-                  disabled={isRecording}
+                  disabled={false}
                 >
                   <BsRecordFill
                     className={`text-3xl transition-all duration-200 ${
@@ -493,7 +649,7 @@ export default function CreateMusic({ params }: { params: any }) {
                       <BsPlus className="text-3xl" /> Add Track
                     </button>
                     <button
-                      onClick={onOpen}
+                      onClick={handleManageFiles}
                       className="flex items-center rounded-full px-3 py-1 font-bold text-white bg-neutral-800 hover:bg-[#bca6cf] transition-colors"
                     >
                       <BsPlus className="text-3xl" /> Add Files
@@ -550,6 +706,9 @@ export default function CreateMusic({ params }: { params: any }) {
                         files={audioFiles.filter((f) => f.trackId === track.id)}
                         onFileDrop={handleFileDrop}
                         onAudioMove={handleAudioMove}
+                        duration={totalDuration}
+                        isPlaying={isPlaying}
+                        currentTime={currentTime}
                       />
                     ))}
                   </div>
@@ -560,9 +719,17 @@ export default function CreateMusic({ params }: { params: any }) {
         </div>
       </div>
       <ManageFilesModal
-        isOpen={isOpen}
-        onOpenChange={onOpenChange}
+        isOpen={isManageFilesModalOpen}
+        onOpenChange={() => setIsManageFilesModalOpen(false)}
         onFileUpload={handleFileUpload}
+        projectId={4}
+        recordedFiles={recordedAudioFilesRef.current}
+      />
+      <LyricToVocalsModal
+        isOpen={isLyricToVocalsOpen}
+        onOpenChange={() => setIsLyricToVocalsOpen(!isLyricToVocalsOpen)}
+        onClose={() => setIsLyricToVocalsOpen(false)}
+        onGenerateVocals={handleLyricToVocals}
       />
     </>
   );
@@ -711,11 +878,17 @@ function Timeline({
   files,
   onFileDrop,
   onAudioMove,
+  duration,
+  isPlaying,
+  currentTime,
 }: {
   trackId: number;
   files: AudioFile[];
   onFileDrop: (e: React.DragEvent, trackId: number) => void;
   onAudioMove: (fileId: string, trackId: number, startTime: number) => void;
+  duration: number;
+  isPlaying: boolean;
+  currentTime: number;
 }) {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -795,45 +968,28 @@ function Timeline({
         {files.map((file) => (
           <div
             key={file.id}
-            className="absolute top-0 h-[calc(100%-2rem)] bg-[#bca6cf]/20 rounded-lg cursor-move group"
+            className="absolute h-full rounded-lg bg-neutral-700 cursor-move"
             style={{
-              left: `${file.startTime * 100}px`,
-              width: `${Math.max(file.duration * 100, 200)}px`,
+              left: `${(file.startTime / duration) * 100}%`,
+              width: `${(file.duration / duration) * 100}%`,
             }}
             draggable
             onDragStart={(e) => handleAudioDragStart(e, file.id)}
+            onDragEnd={handleAudioDrop}
           >
-            {/* Waveform visualization */}
-            <div className="absolute inset-x-0 bottom-0 h-12 px-3">
-              <div className="relative h-full">
-                <div className="absolute inset-0 flex items-center justify-between">
-                  {Array.from({ length: 50 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-0.5 bg-[#bca6cf]/30 rounded-full transition-all duration-200"
-                      style={{
-                        height: `${30 + Math.sin(i * 0.5) * 20}%`,
-                        opacity: isDraggingOver ? 0.5 : 0.3,
-                        transform: isDraggingOver ? "scaleY(1.1)" : "scaleY(1)",
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+            <div className="p-2 text-xs truncate">{file.name}</div>
 
-            {/* File info */}
-            <div className="p-3">
-              <div className="text-sm font-medium truncate text-white">
-                {file.name}
-              </div>
-              <div className="text-xs text-neutral-400">
-                {file.duration.toFixed(1)}s
-              </div>
-            </div>
-
-            {/* Hover effect */}
-            <div className="absolute inset-0 ring-2 ring-[#bca6cf]/0 group-hover:ring-[#bca6cf]/30 rounded-lg transition-all" />
+            {/* Render MIDI Player for MIDI files */}
+            {file.type === "midi" && (
+              <MidiPlayer
+                url={file.url}
+                trackId={file.trackId}
+                startTime={file.startTime}
+                duration={file.duration}
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+              />
+            )}
           </div>
         ))}
       </div>
@@ -860,14 +1016,34 @@ function TimelineRuler({
 
   // Calculate number of markers needed based on duration
   const markerCount = useMemo(() => {
-    return Math.ceil(duration); // One marker per second
+    // Ensure markerCount is always a valid positive integer
+    // Default to 60 seconds (as per requirements) if duration is invalid
+    return Math.max(
+      1,
+      Math.ceil(isNaN(duration) || duration <= 0 ? 60 : duration)
+    );
   }, [duration]);
 
   const timeMarkers = useMemo(() => {
-    return Array.from({ length: markerCount }, (_, i) => i);
+    try {
+      // Ensure we're creating an array with valid length
+      const count = Math.max(1, Math.floor(markerCount));
+      return Array.from({ length: count }, (_, i) => i);
+    } catch (error) {
+      console.error("Error creating time markers:", error);
+      // Fallback to a safe default
+      return [0]; // At least one marker
+    }
   }, [markerCount]);
 
-  const minorMarkers = Array.from({ length: 4 }, (_, i) => i);
+  const minorMarkers = useMemo(() => {
+    try {
+      return Array.from({ length: 4 }, (_, i) => i);
+    } catch (error) {
+      console.error("Error creating minor markers:", error);
+      return [0]; // Fallback
+    }
+  }, []);
 
   const playheadPosition = useMemo(() => {
     return currentTime * 100;
