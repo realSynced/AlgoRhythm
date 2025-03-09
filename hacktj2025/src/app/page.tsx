@@ -9,6 +9,8 @@ import {
   Button,
 } from "@heroui/react";
 
+// import Music from "../../public/";
+
 export default function Home() {
   return (
     <div className="text-white">
