@@ -28,7 +28,7 @@ import {
 } from "@heroui/dropdown";
 
 import { useDisclosure } from "@nextui-org/react";
-import ManageFilesModal from "@/app/da/components/ManageFilesModal";
+import ManageFilesModal from "../components/ManageFilesModal";
 
 interface Track {
   id: number;
